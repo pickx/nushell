@@ -2684,30 +2684,28 @@ pub fn parse_simple_cell_path(working_set: &mut StateWorkingSet, span: Span) -> 
     )
 }
 
-fn parse_subexpression(working_set: &mut StateWorkingSet, span: Span) -> Expression {
-    let bytes = working_set.get_span_contents(span);
-
-    let mut start = span.start;
-    let mut end = span.end;
-    let mut is_closed = true;
+fn parse_subexpression(working_set: &mut StateWorkingSet, mut span: Span) -> Expression {
+    let bytes = working_set.get_span_contents(span).to_owned();
+    let mut bytes = bytes.as_slice();
 
     if bytes.starts_with(b"(") {
-        start += 1;
+        span.start += 1;
+        bytes = &bytes[1..];
     }
-    if bytes.ends_with(b")") {
-        end -= 1;
+
+    let is_closed = bytes.ends_with(b")");
+
+    if is_closed {
+        span.end -= 1;
+        bytes = &bytes[..bytes.len() - 1];
     } else {
-        working_set.error(ParseError::Unclosed(")".into(), Span::new(end, end)));
-        is_closed = false;
+        let unclosed_err = ParseError::Unclosed(")".into(), Span::new(span.end, span.end));
+        working_set.error(unclosed_err);
     }
 
-    let span = Span::new(start, end);
-
-    let source = working_set.get_span_contents(span);
-
-    let (output, err) = lex(source, span.start, &[b'\n', b'\r'], &[], true);
+    let (output, err) = lex(bytes, span.start, &[b'\n', b'\r'], &[], true);
     if let Some(err) = err {
-        working_set.error(err)
+        working_set.error(err);
     }
 
     // Creating a Type scope to parse the new block. This will keep track of
