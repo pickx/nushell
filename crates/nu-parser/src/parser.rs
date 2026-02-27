@@ -2684,6 +2684,43 @@ pub fn parse_simple_cell_path(working_set: &mut StateWorkingSet, span: Span) -> 
     )
 }
 
+fn parse_subexpression(working_set: &mut StateWorkingSet, span: Span) -> Expression {
+    let bytes = working_set.get_span_contents(span);
+
+    let mut start = span.start;
+    let mut end = span.end;
+    let mut is_closed = true;
+
+    if bytes.starts_with(b"(") {
+        start += 1;
+    }
+    if bytes.ends_with(b")") {
+        end -= 1;
+    } else {
+        working_set.error(ParseError::Unclosed(")".into(), Span::new(end, end)));
+        is_closed = false;
+    }
+
+    let span = Span::new(start, end);
+
+    let source = working_set.get_span_contents(span);
+
+    let (output, err) = lex(source, span.start, &[b'\n', b'\r'], &[], true);
+    if let Some(err) = err {
+        working_set.error(err)
+    }
+
+    // Creating a Type scope to parse the new block. This will keep track of
+    // the previous input type found in that block
+    let output = parse_block(working_set, &output, span, is_closed, true);
+
+    let ty = output.output_type();
+
+    let block_id = working_set.add_block(Arc::new(output));
+    let expr = Expr::Subexpression(block_id);
+    Expression::new(working_set, expr, span, ty)
+}
+
 pub fn parse_full_cell_path(
     working_set: &mut StateWorkingSet,
     implicit_head: Option<VarId>,
@@ -2710,43 +2747,11 @@ pub fn parse_full_cell_path(
         let (head, expect_dot) = if bytes.starts_with(b"(") {
             trace!("parsing: paren-head of full cell path");
 
-            let head_span = head.span;
-            let mut start = head.span.start;
-            let mut end = head.span.end;
-            let mut is_closed = true;
+            let output = parse_subexpression(working_set, head.span);
 
-            if bytes.starts_with(b"(") {
-                start += 1;
-            }
-            if bytes.ends_with(b")") {
-                end -= 1;
-            } else {
-                working_set.error(ParseError::Unclosed(")".into(), Span::new(end, end)));
-                is_closed = false;
-            }
-
-            let span = Span::new(start, end);
-
-            let source = working_set.get_span_contents(span);
-
-            let (output, err) = lex(source, span.start, &[b'\n', b'\r'], &[], true);
-            if let Some(err) = err {
-                working_set.error(err)
-            }
-
-            // Creating a Type scope to parse the new block. This will keep track of
-            // the previous input type found in that block
-            let output = parse_block(working_set, &output, span, is_closed, true);
-
-            let ty = output.output_type();
-
-            let block_id = working_set.add_block(Arc::new(output));
             tokens.next();
 
-            (
-                Expression::new(working_set, Expr::Subexpression(block_id), head_span, ty),
-                true,
-            )
+            (output, true)
         } else if bytes.starts_with(b"[") {
             trace!("parsing: table head of full cell path");
 
