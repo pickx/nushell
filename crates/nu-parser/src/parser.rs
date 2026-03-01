@@ -2520,6 +2520,10 @@ pub fn parse_variable_expr(working_set: &mut StateWorkingSet, span: Span) -> Exp
     }
 }
 
+fn parse_index(val: i64, span: Span) -> Result<usize, ParseError> {
+    usize::try_from(val).map_err(|_| ParseError::Expected("a non-negative integer", span))
+}
+
 pub fn parse_cell_path(
     working_set: &mut StateWorkingSet,
     tokens: impl Iterator<Item = Token>,
@@ -2648,8 +2652,8 @@ fn parse_cell_path_member_literal(
             expr: Expr::Int(val),
             span,
             ..
-        } => Ok(PathMember::Int {
-            val: val as usize,
+        } => parse_index(val, span).map(|val| PathMember::Int {
+            val,
             span,
             optional: false,
         }),
@@ -2692,8 +2696,8 @@ fn parse_cell_path_member_subexpression(
     }
 
     match eval_constant_with_span(working_set, &subexpression) {
-        Ok((Value::Int { val, .. }, span)) => Ok(PathMember::Int {
-            val: val as usize,
+        Ok((Value::Int { val, .. }, span)) => parse_index(val, span).map(|val| PathMember::Int {
+            val,
             span,
             optional: false,
         }),
