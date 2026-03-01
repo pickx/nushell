@@ -2592,7 +2592,7 @@ pub fn parse_cell_path(
         // both parse_int and parse_string require their source to be non-empty
         // all cases where `bytes` is empty is an error
         let Some((&first, rest)) = bytes.split_first() else {
-            working_set.error(ParseError::Expected("string", path_element.span));
+            working_set.error(ParseError::Expected("int or string", path_element.span));
             return tail;
         };
         let single_char = rest.is_empty();
@@ -2629,7 +2629,8 @@ pub fn parse_cell_path(
                             });
                         }
                         _ => {
-                            working_set.error(ParseError::Expected("string", path_element.span));
+                            working_set
+                                .error(ParseError::Expected("int or string", path_element.span));
                             return tail;
                         }
                     }
