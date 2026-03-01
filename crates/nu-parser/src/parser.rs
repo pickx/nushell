@@ -2680,28 +2680,35 @@ fn parse_cell_path_member_subexpression(
 ) -> Result<PathMember, ParseError> {
     let subexpression = parse_subexpression(working_set, outer_span);
 
-    match eval_constant(working_set, &subexpression) {
-        Ok(value) => {
-            let span = value.span();
+    // avoids nesting in the `match` expression below
+    // (incoming deprecation of `internal_span` forbids pattern matching)
+    fn eval_constant_with_span(
+        working_set: &StateWorkingSet,
+        expr: &Expression,
+    ) -> Result<(Value, Span), ShellError> {
+        let value = eval_constant(working_set, &expr)?;
+        let span = value.span();
+        Ok((value, span))
+    }
 
-            match value {
-                Value::Int { val, .. } => Ok(PathMember::Int {
-                    val: val as usize,
-                    span,
-                    optional: false,
-                }),
-                Value::String { val, .. } => Ok(PathMember::String {
-                    val,
-                    span,
-                    casing: Casing::Sensitive,
-                    optional: false,
-                }),
-                _ => Err(ParseError::Expected(
-                    "subexpression of type int or string",
-                    span,
-                )),
-            }
-        }
+    match eval_constant_with_span(working_set, &subexpression) {
+        Ok((Value::Int { val, .. }, span)) => Ok(PathMember::Int {
+            val: val as usize,
+            span,
+            optional: false,
+        }),
+
+        Ok((Value::String { val, .. }, span)) => Ok(PathMember::String {
+            val,
+            span,
+            casing: Casing::Sensitive,
+            optional: false,
+        }),
+
+        Ok((_, span)) => Err(ParseError::Expected(
+            "subexpression of type int or string",
+            span,
+        )),
 
         Err(
             err @ ShellError::NotAConstant { span } | err @ ShellError::NotAConstCommand { span },
