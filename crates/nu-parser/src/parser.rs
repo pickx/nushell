@@ -2599,41 +2599,47 @@ pub fn parse_cell_path(
 
         if let TokenType::PathMember = expected_token {
             let starting_error_count = working_set.parse_errors.len();
+            let span = path_element.span;
+            let path_member = {
+                let expr = parse_int(working_set, span);
+                working_set.parse_errors.truncate(starting_error_count);
 
-            let expr = parse_int(working_set, path_element.span);
-            working_set.parse_errors.truncate(starting_error_count);
-
-            match expr {
-                Expression {
-                    expr: Expr::Int(val),
-                    span,
-                    ..
-                } => tail.push(PathMember::Int {
-                    val: val as usize,
-                    span,
-                    optional: false,
-                }),
-                _ => {
-                    let result = parse_string(working_set, path_element.span);
-                    match result {
-                        Expression {
-                            expr: Expr::String(string),
-                            span,
-                            ..
-                        } => {
-                            tail.push(PathMember::String {
+                match expr {
+                    Expression {
+                        expr: Expr::Int(val),
+                        span,
+                        ..
+                    } => Ok(PathMember::Int {
+                        val: val as usize,
+                        span,
+                        optional: false,
+                    }),
+                    _ => {
+                        let result = parse_string(working_set, span);
+                        match result {
+                            Expression {
+                                expr: Expr::String(string),
+                                span,
+                                ..
+                            } => Ok(PathMember::String {
                                 val: string,
                                 span,
                                 optional: false,
                                 casing: Casing::Sensitive,
-                            });
-                        }
-                        _ => {
-                            working_set
-                                .error(ParseError::Expected("int or string", path_element.span));
-                            return tail;
+                            }),
+                            _ => Err(ParseError::Expected("int or string", span)),
                         }
                     }
+                }
+            };
+
+            match path_member {
+                Ok(path_member) => {
+                    tail.push(path_member);
+                }
+                Err(err) => {
+                    working_set.error(err);
+                    return tail;
                 }
             }
             expected_token = TokenType::DotOrSign;
