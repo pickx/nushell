@@ -2598,40 +2598,7 @@ pub fn parse_cell_path(
         let single_char = rest.is_empty();
 
         if let TokenType::PathMember = expected_token {
-            let starting_error_count = working_set.parse_errors.len();
-            let span = path_element.span;
-            let path_member = {
-                let expr = parse_int(working_set, span);
-                working_set.parse_errors.truncate(starting_error_count);
-
-                match expr {
-                    Expression {
-                        expr: Expr::Int(val),
-                        span,
-                        ..
-                    } => Ok(PathMember::Int {
-                        val: val as usize,
-                        span,
-                        optional: false,
-                    }),
-                    _ => {
-                        let result = parse_string(working_set, span);
-                        match result {
-                            Expression {
-                                expr: Expr::String(string),
-                                span,
-                                ..
-                            } => Ok(PathMember::String {
-                                val: string,
-                                span,
-                                optional: false,
-                                casing: Casing::Sensitive,
-                            }),
-                            _ => Err(ParseError::Expected("int or string", span)),
-                        }
-                    }
-                }
-            };
+            let path_member = parse_cell_path_member(working_set, path_element.span);
 
             match path_member {
                 Ok(path_member) => {
@@ -2663,6 +2630,42 @@ pub fn parse_cell_path(
     }
 
     tail
+}
+
+fn parse_cell_path_member(
+    working_set: &mut StateWorkingSet,
+    span: Span,
+) -> Result<PathMember, ParseError> {
+    let starting_error_count = working_set.parse_errors.len();
+    let expr = parse_int(working_set, span);
+    working_set.parse_errors.truncate(starting_error_count);
+    match expr {
+        Expression {
+            expr: Expr::Int(val),
+            span,
+            ..
+        } => Ok(PathMember::Int {
+            val: val as usize,
+            span,
+            optional: false,
+        }),
+        _ => {
+            let result = parse_string(working_set, span);
+            match result {
+                Expression {
+                    expr: Expr::String(string),
+                    span,
+                    ..
+                } => Ok(PathMember::String {
+                    val: string,
+                    span,
+                    optional: false,
+                    casing: Casing::Sensitive,
+                }),
+                _ => Err(ParseError::Expected("int or string", span)),
+            }
+        }
+    }
 }
 
 pub fn parse_simple_cell_path(working_set: &mut StateWorkingSet, span: Span) -> Expression {
