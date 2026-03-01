@@ -2530,7 +2530,7 @@ pub fn parse_cell_path(
         DotOrSign,        // . or ? or !
         DotOrExclamation, // . or !
         DotOrQuestion,    // . or ?
-        PathMember,       // an int or string, like `1` or `foo`
+        PathMember,       // int or string or const subexpression (of type int or string)
     }
 
     enum ModifyMember {
@@ -2598,7 +2598,11 @@ pub fn parse_cell_path(
         let single_char = rest.is_empty();
 
         if let TokenType::PathMember = expected_token {
-            let path_member = parse_cell_path_member(working_set, path_element.span);
+            let path_member = if first == b'(' {
+                parse_cell_path_member_subexpression(working_set, path_element.span)
+            } else {
+                parse_cell_path_member_literal(working_set, path_element.span)
+            };
 
             match path_member {
                 Ok(path_member) => {
@@ -2632,7 +2636,7 @@ pub fn parse_cell_path(
     tail
 }
 
-fn parse_cell_path_member(
+fn parse_cell_path_member_literal(
     working_set: &mut StateWorkingSet,
     span: Span,
 ) -> Result<PathMember, ParseError> {
@@ -2665,6 +2669,49 @@ fn parse_cell_path_member(
                 _ => Err(ParseError::Expected("int or string", span)),
             }
         }
+    }
+}
+
+/// we only accept constant subexpressions,
+/// and only if they evaluate to int or string
+fn parse_cell_path_member_subexpression(
+    working_set: &mut StateWorkingSet,
+    outer_span: Span,
+) -> Result<PathMember, ParseError> {
+    let subexpression = parse_subexpression(working_set, outer_span);
+
+    match eval_constant(working_set, &subexpression) {
+        Ok(value) => {
+            let span = value.span();
+
+            match value {
+                Value::Int { val, .. } => Ok(PathMember::Int {
+                    val: val as usize,
+                    span,
+                    optional: false,
+                }),
+                Value::String { val, .. } => Ok(PathMember::String {
+                    val,
+                    span,
+                    casing: Casing::Sensitive,
+                    optional: false,
+                }),
+                _ => Err(ParseError::Expected(
+                    "subexpression of type int or string",
+                    span,
+                )),
+            }
+        }
+
+        Err(
+            err @ ShellError::NotAConstant { span } | err @ ShellError::NotAConstCommand { span },
+        ) => {
+            let err = err.wrap(&working_set, span);
+            Err(err)
+        }
+
+        // is this right? also note that we're using the outer span here, which isn't ideal
+        Err(_) => Err(ParseError::Expected("int or string", outer_span)),
     }
 }
 
