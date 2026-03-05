@@ -2602,10 +2602,9 @@ pub fn parse_cell_path(
         let single_char = rest.is_empty();
 
         if let TokenType::PathMember = expected_token {
-            let path_member = if first == b'(' {
-                parse_cell_path_member_subexpression(working_set, path_element.span)
-            } else {
-                parse_cell_path_member_literal(working_set, path_element.span)
+            let path_member = match first {
+                b'(' => parse_cell_path_member_subexpression(working_set, path_element.span),
+                _ => parse_cell_path_member_literal(working_set, path_element.span),
             };
 
             match path_member {
@@ -2683,6 +2682,8 @@ fn parse_cell_path_member_subexpression(
     outer_span: Span,
 ) -> Result<PathMember, ParseError> {
     let subexpression = parse_subexpression(working_set, outer_span);
+
+    dbg!(&subexpression);
 
     // avoids nesting in the `match` expression below
     // (incoming deprecation of `internal_span` forbids pattern matching)
