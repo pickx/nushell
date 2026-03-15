@@ -493,13 +493,8 @@ pub(crate) fn compile_expression(
             if matches!(full_cell_path.head.expr, Expr::Var(ENV_VARIABLE_ID))
                 && full_cell_path.is_static()
             {
-                let static_tail: Vec<PathMember> = full_cell_path
-                    .tail
-                    .iter()
-                    .filter_map(|seg| seg.as_static())
-                    .cloned()
-                    .collect();
-                compile_load_env(builder, expr.span, &static_tail, out_reg)
+                let tail_static: Vec<_> = full_cell_path.tail_static().cloned().collect();
+                compile_load_env(builder, expr.span, &tail_static, out_reg)
             } else {
                 compile_expression(
                     working_set,

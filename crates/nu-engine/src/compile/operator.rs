@@ -276,14 +276,11 @@ pub(crate) fn compile_assignment(
 
                     // Do the upsert on the current value to incorporate rhs
                     builder.set_label(upsert_label, builder.here())?;
-                    let tail_members: Vec<PathMember> = path.tail[1..]
-                        .iter()
-                        .filter_map(|seg| seg.as_static())
-                        .cloned()
-                        .collect();
+
                     compile_upsert_cell_path(
                         builder,
-                        tail_members.as_slice().into_spanned(lhs.span),
+                        path.tail_static().cloned().collect(),
+                        lhs.span,
                         head_reg,
                         rhs_reg,
                         assignment_span,
@@ -326,15 +323,10 @@ pub(crate) fn compile_assignment(
                 )?;
 
                 // Upsert the tail of the path into the old value of the head expression
-                let tail_members: Vec<PathMember> = path
-                    .tail
-                    .iter()
-                    .filter_map(|seg| seg.as_static())
-                    .cloned()
-                    .collect();
                 compile_upsert_cell_path(
                     builder,
-                    tail_members.as_slice().into_spanned(lhs.span),
+                    path.tail_static().cloned().collect(),
+                    lhs.span,
                     head_reg,
                     rhs_reg,
                     assignment_span,
@@ -352,29 +344,23 @@ pub(crate) fn compile_assignment(
 /// Compile an upsert-cell-path instruction, with known literal members
 pub(crate) fn compile_upsert_cell_path(
     builder: &mut BlockBuilder,
-    members: Spanned<&[PathMember]>,
+    members: Vec<PathMember>,
+    members_span: Span,
     src_dst: RegId,
     new_value: RegId,
     span: Span,
 ) -> Result<(), CompileError> {
-    let path_reg = builder.literal(
-        Literal::CellPath(
-            CellPath {
-                members: members.item.to_vec(),
-            }
-            .into(),
-        )
-        .into_spanned(members.span),
-    )?;
-    builder.push(
-        Instruction::UpsertCellPath {
-            src_dst,
-            path: path_reg,
-            new_value,
-        }
-        .into_spanned(span),
-    )?;
-    Ok(())
+    let path = Box::new(CellPath { members });
+    let path = Literal::CellPath(path).into_spanned(members_span);
+    let path = builder.literal(path)?;
+
+    let instruction = Instruction::UpsertCellPath {
+        src_dst,
+        path,
+        new_value,
+    }
+    .into_spanned(span);
+    builder.push(instruction)
 }
 
 /// Compile the correct sequence to get an environment variable + follow a path on it

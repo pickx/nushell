@@ -402,7 +402,12 @@ fn flatten_expression_into(
         Expr::FullCellPath(cell_path) => {
             flatten_expression_into(working_set, &cell_path.head, output);
             for segment in &cell_path.tail {
-                push_cell_path_segment(working_set, segment, output);
+                match segment {
+                    CellPathSegment::Static(member) => push_path_member(member, output),
+                    CellPathSegment::Dynamic { expr, .. } => {
+                        flatten_expression_into(working_set, expr, output)
+                    }
+                };
             }
         }
         Expr::ImportPattern(import_pattern) => {

@@ -327,7 +327,9 @@ impl FullCellPath {
     }
 
     pub fn is_static(&self) -> bool {
-        full_cell_path.tail_static().count() == full_cell_path.tail.len()
+        self.tail
+            .iter()
+            .all(|it| matches!(it, CellPathSegment::Static(..)))
     }
 }
 
