@@ -20,9 +20,7 @@ pub struct CellPathCompletion<'a> {
 fn prefix_from_cell_path_segment(segment: &CellPathSegment, pos: usize) -> (String, Span) {
     let (prefix_str, start) = match segment {
         CellPathSegment::Static(PathMember::String { val, span, .. }) => (val.clone(), span.start),
-        CellPathSegment::Static(PathMember::Int { val, span, .. }) => {
-            (val.to_string(), span.start)
-        }
+        CellPathSegment::Static(PathMember::Int { val, span, .. }) => (val.to_string(), span.start),
         CellPathSegment::Dynamic { span, .. } => (String::new(), span.start),
     };
     let prefix_str = prefix_str
@@ -67,7 +65,7 @@ impl Completer for CellPathCompletion<'_> {
             .get(0..path_member_num_before_pos)
             .unwrap_or_default()
             .iter()
-            .filter_map(|seg| seg.as_path_member())
+            .filter_map(|seg| seg.as_static())
             .cloned()
             .collect();
         let value = eval_cell_path(

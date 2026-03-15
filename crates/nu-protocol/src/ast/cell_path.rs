@@ -211,11 +211,11 @@ impl CellPathSegment {
         }
     }
 
-    /// Returns the inner [`PathMember`] if this is a `Static` segment, otherwise `None`.
-    pub fn as_path_member(&self) -> Option<&PathMember> {
-        match self {
-            CellPathSegment::Static(member) => Some(member),
-            CellPathSegment::Dynamic { .. } => None,
+    pub fn as_static(&self) -> Option<&PathMember> {
+        if let CellPathSegment::Static(member) = self {
+            Some(member)
+        } else {
+            None
         }
     }
 }
@@ -319,6 +319,16 @@ impl Display for CellPath {
 pub struct FullCellPath {
     pub head: Expression,
     pub tail: Vec<CellPathSegment>,
+}
+
+impl FullCellPath {
+    pub fn tail_static(&self) -> impl Iterator<Item = &PathMember> {
+        self.tail.iter().filter_map(|it| it.as_static())
+    }
+
+    pub fn is_static(&self) -> bool {
+        full_cell_path.tail_static().count() == full_cell_path.tail.len()
+    }
 }
 
 #[cfg(test)]

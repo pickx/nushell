@@ -473,7 +473,7 @@ fn find_id_in_expr(
                     .tail
                     .iter()
                     .take_while(|seg| seg.span().start <= *location)
-                    .filter_map(|seg| seg.as_path_member())
+                    .filter_map(|seg| seg.as_static())
                     .cloned()
                     .collect();
                 let Some(span) = tail.last().map(|pm| pm.span()) else {

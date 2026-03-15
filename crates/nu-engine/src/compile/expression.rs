@@ -5,8 +5,10 @@ use super::{
 
 use nu_protocol::{
     ENV_VARIABLE_ID, IN_VARIABLE_ID, IntoSpanned, RegId, Span, Value,
-    ast::{CellPath, CellPathSegment, Expr, Expression, ListItem, PathMember, RecordItem,
-        ValueWithUnit},
+    ast::{
+        CellPath, CellPathSegment, Expr, Expression, ListItem, PathMember, RecordItem,
+        ValueWithUnit,
+    },
     engine::StateWorkingSet,
     ir::{DataSlice, Instruction, Literal},
 };
@@ -489,12 +491,12 @@ pub(crate) fn compile_expression(
             // Use the $env optimization only when all tail members are static; expression
             // members require the general compilation path.
             if matches!(full_cell_path.head.expr, Expr::Var(ENV_VARIABLE_ID))
-                && !has_expr_members
+                && full_cell_path.is_static()
             {
                 let static_tail: Vec<PathMember> = full_cell_path
                     .tail
                     .iter()
-                    .filter_map(|seg| seg.as_path_member())
+                    .filter_map(|seg| seg.as_static())
                     .cloned()
                     .collect();
                 compile_load_env(builder, expr.span, &static_tail, out_reg)

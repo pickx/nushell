@@ -617,13 +617,13 @@ impl Eval for EvalRuntime {
                                 let tail_members: Vec<PathMember> = cell_path
                                     .tail
                                     .iter()
-                                    .filter_map(|seg| seg.as_path_member())
+                                    .filter_map(|seg| seg.as_static())
                                     .cloned()
                                     .collect();
                                 lhs.upsert_data_at_cell_path(&tail_members, rhs)?;
                                 let value = lhs.follow_cell_path(&[{
                                     let mut pm = cell_path.tail[0]
-                                        .as_path_member()
+                                        .as_static()
                                         .expect("dynamic segment in $env assignment should have been caught above")
                                         .clone();
                                     pm.make_insensitive();
@@ -650,7 +650,7 @@ impl Eval for EvalRuntime {
                                 let tail_members: Vec<PathMember> = cell_path
                                     .tail
                                     .iter()
-                                    .filter_map(|seg| seg.as_path_member())
+                                    .filter_map(|seg| seg.as_static())
                                     .cloned()
                                     .collect();
                                 lhs.upsert_data_at_cell_path(&tail_members, rhs)?;

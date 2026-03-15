@@ -2866,7 +2866,7 @@ pub fn parse_full_cell_path(
             if nu_experimental::CELL_PATH_TYPES.get() {
                 let static_members: Vec<PathMember> = tail
                     .iter()
-                    .filter_map(|seg| seg.as_path_member())
+                    .filter_map(|seg| seg.as_static())
                     .cloned()
                     .collect();
                 head.ty

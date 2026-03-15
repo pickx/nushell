@@ -1,7 +1,9 @@
 use nu_protocol::{
     ENV_VARIABLE_ID, IntoSpanned, RegId, Span, Spanned, Value,
-    ast::{Assignment, Boolean, CellPath, CellPathSegment, Expr, Expression, Math, Operator,
-        PathMember, Pattern},
+    ast::{
+        Assignment, Boolean, CellPath, CellPathSegment, Expr, Expression, Math, Operator,
+        PathMember, Pattern,
+    },
     engine::StateWorkingSet,
     ir::{Instruction, Literal},
 };
@@ -276,7 +278,7 @@ pub(crate) fn compile_assignment(
                     builder.set_label(upsert_label, builder.here())?;
                     let tail_members: Vec<PathMember> = path.tail[1..]
                         .iter()
-                        .filter_map(|seg| seg.as_path_member())
+                        .filter_map(|seg| seg.as_static())
                         .cloned()
                         .collect();
                     compile_upsert_cell_path(
@@ -327,7 +329,7 @@ pub(crate) fn compile_assignment(
                 let tail_members: Vec<PathMember> = path
                     .tail
                     .iter()
-                    .filter_map(|seg| seg.as_path_member())
+                    .filter_map(|seg| seg.as_static())
                     .cloned()
                     .collect();
                 compile_upsert_cell_path(

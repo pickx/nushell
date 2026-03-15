@@ -237,12 +237,17 @@ impl Completer for OperatorCompletion<'_> {
                     let tail_members: Vec<PathMember> = path
                         .tail
                         .iter()
-                        .filter_map(|seg| seg.as_path_member())
+                        .filter_map(|seg| seg.as_static())
                         .cloned()
                         .collect();
-                    let value =
-                        eval_cell_path(working_set, stack, &path.head, &tail_members, path.head.span)
-                            .unwrap_or_default();
+                    let value = eval_cell_path(
+                        working_set,
+                        stack,
+                        &path.head,
+                        &tail_members,
+                        path.head.span,
+                    )
+                    .unwrap_or_default();
                     let mutable = is_expression_mutable(&self.left_hand_side.expr, working_set);
                     // to avoid duplication
                     needs_assignment_ops = false;
