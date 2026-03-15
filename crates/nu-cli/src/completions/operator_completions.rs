@@ -3,7 +3,7 @@ use crate::completions::{
 };
 use nu_protocol::{
     ENV_VARIABLE_ID, Span, SuggestionKind, Type, Value,
-    ast::{self, CellPathSegment, Comparison, Expr, Expression, PathMember},
+    ast::{self, ParsedPathMember, Comparison, Expr, Expression, PathMember},
     engine::{Stack, StateWorkingSet},
 };
 use reedline::Suggestion;

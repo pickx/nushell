@@ -1,8 +1,8 @@
 use nu_protocol::{
     DeclId, GetSpan, Span, SyntaxShape, VarId,
     ast::{
-        Argument, Block, CellPathSegment, Expr, Expression, ExternalArgument, ImportPatternMember,
-        ListItem, MatchPattern, PathMember, Pattern, Pipeline, PipelineElement,
+        Argument, Block, Expr, Expression, ExternalArgument, ImportPatternMember, ListItem,
+        MatchPattern, ParsedPathMember, PathMember, Pattern, Pipeline, PipelineElement,
         PipelineRedirection, RecordItem,
     },
     engine::StateWorkingSet,
@@ -185,22 +185,6 @@ fn push_path_member(member: &PathMember, output: &mut Vec<(Span, FlatShape)>) {
     match member {
         PathMember::String { span, .. } => output.push((*span, FlatShape::String)),
         PathMember::Int { span, .. } => output.push((*span, FlatShape::Int)),
-    }
-}
-
-fn push_cell_path_segment(
-    working_set: &StateWorkingSet,
-    segment: &CellPathSegment,
-    output: &mut Vec<(Span, FlatShape)>,
-) {
-    match segment {
-        CellPathSegment::Static(PathMember::String { span, .. }) => {
-            output.push((*span, FlatShape::String))
-        }
-        CellPathSegment::Static(PathMember::Int { span, .. }) => {
-            output.push((*span, FlatShape::Int))
-        }
-        CellPathSegment::Dynamic { expr, .. } => flatten_expression_into(working_set, expr, output),
     }
 }
 
@@ -401,10 +385,10 @@ fn flatten_expression_into(
         }
         Expr::FullCellPath(cell_path) => {
             flatten_expression_into(working_set, &cell_path.head, output);
-            for segment in &cell_path.tail {
-                match segment {
-                    CellPathSegment::Static(member) => push_path_member(member, output),
-                    CellPathSegment::Dynamic { expr, .. } => {
+            for member in &cell_path.tail {
+                match member {
+                    ParsedPathMember::Static(member) => push_path_member(member, output),
+                    ParsedPathMember::Dynamic { expr, .. } => {
                         flatten_expression_into(working_set, expr, output)
                     }
                 };

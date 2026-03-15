@@ -4,8 +4,8 @@ use nu_path::expand_path;
 use crate::{
     BlockId, Config, ENV_VARIABLE_ID, GetSpan, Range, Record, ShellError, Span, Value, VarId,
     ast::{
-        Assignment, Bits, Boolean, Call, CellPathSegment, Comparison, Expr, Expression,
-        ExternalArgument, ListItem, Math, Operator, PathMember, RecordItem, eval_operator,
+        Assignment, Bits, Boolean, Call, Comparison, Expr, Expression, ExternalArgument, ListItem,
+        Math, Operator, ParsedPathMember, PathMember, RecordItem, eval_operator,
     },
     casing::Casing,
     debugger::DebugContext,
@@ -62,10 +62,10 @@ pub trait Eval {
                 // special treatment.
                 let is_env = cell_path.head.expr == Expr::Var(ENV_VARIABLE_ID);
                 let mut members: Vec<PathMember> = Vec::with_capacity(cell_path.tail.len());
-                for (i, segment) in cell_path.tail.iter().enumerate() {
-                    let mut member = match segment {
-                        CellPathSegment::Static(m) => m.clone(),
-                        CellPathSegment::Dynamic { expr, span, optional } => {
+                for (i, member) in cell_path.tail.iter().enumerate() {
+                    let mut member = match member {
+                        ParsedPathMember::Static(member) => member.clone(),
+                        ParsedPathMember::Dynamic { expr, span, optional } => {
                             let val = Self::eval::<D>(state, mut_state, expr)?;
                             match val {
                                 Value::Int { val, .. } => {

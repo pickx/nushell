@@ -173,15 +173,13 @@ impl PartialOrd for PathMember {
     }
 }
 
-/// One segment of a [`FullCellPath`] tail in the AST.
-///
-/// Unlike [`PathMember`] (which is used for runtime cell path values), this type exists only
-/// at parse/compile time. `Dynamic` segments are compiled away before any runtime evaluation.
+/// A member of a [`FullCellPath`] tail in the AST.
+/// Exists only at parse/compile time: `Dynamic` members are compiled away before any runtime evaluation.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum CellPathSegment {
-    /// A statically-known path member (string key or integer index).
+pub enum ParsedPathMember {
+    /// statically-known member, either a literal or const-evaluated
     Static(PathMember),
-    /// A path member computed at runtime by evaluating an expression.
+    /// a unevaluated member. evaluation is deferred to runtime
     Dynamic {
         expr: Box<Expression>,
         span: Span,
@@ -189,30 +187,30 @@ pub enum CellPathSegment {
     },
 }
 
-impl CellPathSegment {
+impl ParsedPathMember {
     pub fn make_optional(&mut self) {
         match self {
-            CellPathSegment::Static(member) => member.make_optional(),
-            CellPathSegment::Dynamic { optional, .. } => *optional = true,
+            ParsedPathMember::Static(member) => member.make_optional(),
+            ParsedPathMember::Dynamic { optional, .. } => *optional = true,
         }
     }
 
     pub fn make_insensitive(&mut self) {
         match self {
-            CellPathSegment::Static(member) => member.make_insensitive(),
-            CellPathSegment::Dynamic { .. } => {}
+            ParsedPathMember::Static(member) => member.make_insensitive(),
+            ParsedPathMember::Dynamic { .. } => {}
         }
     }
 
     pub fn span(&self) -> Span {
         match self {
-            CellPathSegment::Static(member) => member.span(),
-            CellPathSegment::Dynamic { span, .. } => *span,
+            ParsedPathMember::Static(member) => member.span(),
+            ParsedPathMember::Dynamic { span, .. } => *span,
         }
     }
 
     pub fn as_static(&self) -> Option<&PathMember> {
-        if let CellPathSegment::Static(member) = self {
+        if let ParsedPathMember::Static(member) = self {
             Some(member)
         } else {
             None
@@ -318,7 +316,7 @@ impl Display for CellPath {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FullCellPath {
     pub head: Expression,
-    pub tail: Vec<CellPathSegment>,
+    pub tail: Vec<ParsedPathMember>,
 }
 
 impl FullCellPath {
@@ -329,7 +327,7 @@ impl FullCellPath {
     pub fn is_static(&self) -> bool {
         self.tail
             .iter()
-            .all(|it| matches!(it, CellPathSegment::Static(..)))
+            .all(|it| matches!(it, ParsedPathMember::Static(..)))
     }
 }
 

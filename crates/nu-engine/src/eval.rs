@@ -4,15 +4,16 @@ use crate::get_full_help;
 use nu_protocol::{
     BlockId, Config, ENV_VARIABLE_ID, IntoPipelineData, PipelineData, PipelineExecutionData,
     ShellError, Span, Value, VarId,
-    ast::{Assignment, Block, Call, CellPathSegment, Expr, Expression, ExternalArgument,
-        PathMember},
+    ast::{
+        Assignment, Block, Call, Expr, Expression, ExternalArgument, ParsedPathMember, PathMember,
+    },
     casing::Casing,
     debugger::DebugContext,
     engine::{Closure, EngineState, Stack},
     eval_base::Eval,
 };
 use nu_utils::IgnoreCaseExt;
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 pub fn eval_call<D: DebugContext>(
     engine_state: &EngineState,
@@ -271,30 +272,32 @@ pub fn eval_expression_with_input<D: DebugContext>(
                     let tail_members: Vec<PathMember> = full_cell_path
                         .tail
                         .iter()
-                        .map(|segment| match segment {
-                            CellPathSegment::Static(m) => Ok(m.clone()),
-                            CellPathSegment::Dynamic {
+                        .map(|member| match member {
+                            ParsedPathMember::Static(member) => Ok(member.clone()),
+                            ParsedPathMember::Dynamic {
                                 expr,
-                                span: seg_span,
+                                span,
                                 optional,
                             } => {
+                                let span = *span;
+                                let optional = *optional;
                                 let val = eval_expression::<D>(engine_state, stack, expr)?;
                                 match val {
                                     Value::Int { val, .. } => usize::try_from(val)
                                         .map_err(|_| ShellError::TypeMismatch {
                                             err_message: "cell path index must be non-negative"
                                                 .into(),
-                                            span: *seg_span,
+                                            span,
                                         })
                                         .map(|idx| PathMember::Int {
                                             val: idx,
-                                            span: *seg_span,
-                                            optional: *optional,
+                                            span,
+                                            optional,
                                         }),
                                     Value::String { val, .. } => Ok(PathMember::String {
                                         val,
-                                        span: *seg_span,
-                                        optional: *optional,
+                                        span,
+                                        optional,
                                         casing: Casing::Sensitive,
                                     }),
                                     other => Err(ShellError::TypeMismatch {
@@ -302,7 +305,7 @@ pub fn eval_expression_with_input<D: DebugContext>(
                                             "cell path member must be int or string, got {}",
                                             other.get_type()
                                         ),
-                                        span: *seg_span,
+                                        span,
                                     }),
                                 }
                             }
@@ -577,6 +580,7 @@ impl Eval for EvalRuntime {
                         if is_env || engine_state.get_var(*var_id).mutable {
                             let mut lhs =
                                 eval_expression::<D>(engine_state, stack, &cell_path.head)?;
+                            let tail_static: Vec<_> = cell_path.tail_static().cloned().collect();
                             if is_env {
                                 // Reject attempts to assign to the entire $env
                                 if cell_path.tail.is_empty() {
@@ -586,20 +590,19 @@ impl Eval for EvalRuntime {
                                 }
 
                                 // Updating environment variables should be case-preserving,
-                                // so we need to figure out the original key before we do anything.
-                                let (key, span) = match &cell_path.tail[0] {
-                                    CellPathSegment::Static(PathMember::String {
-                                        val, span, ..
-                                    }) => (val.to_string(), span),
-                                    CellPathSegment::Static(PathMember::Int {
-                                        val, span, ..
-                                    }) => (val.to_string(), span),
-                                    CellPathSegment::Dynamic { span, .. } => {
-                                        return Err(ShellError::TypeMismatch {
-                                            err_message: "cannot assign to $env with a dynamic cell path member".into(),
-                                            span: *span,
-                                        })
-                                    }
+                                // so we need to figure out the original key before we do anything
+                                let member = &cell_path.tail[0];
+                                let Some(member) = member.as_static() else {
+                                    return Err(ShellError::TypeMismatch {
+                                        err_message:
+                                            "cannot assign to $env with a dynamic cell path member"
+                                                .into(),
+                                        span: member.span(),
+                                    });
+                                };
+                                let (key, span) = match member {
+                                    PathMember::String { val, span, .. } => (val.to_string(), span),
+                                    PathMember::Int { val, span, .. } => (val.to_string(), span),
                                 };
                                 let original_key = if let Value::Record { val: record, .. } = &lhs {
                                     record
@@ -614,22 +617,10 @@ impl Eval for EvalRuntime {
                                 };
 
                                 // Retrieve the updated environment value.
-                                let tail_members: Vec<PathMember> = cell_path
-                                    .tail
-                                    .iter()
-                                    .filter_map(|seg| seg.as_static())
-                                    .cloned()
-                                    .collect();
-                                lhs.upsert_data_at_cell_path(&tail_members, rhs)?;
-                                let value = lhs.follow_cell_path(&[{
-                                    let mut pm = cell_path.tail[0]
-                                        .as_static()
-                                        .expect("dynamic segment in $env assignment should have been caught above")
-                                        .clone();
-                                    pm.make_insensitive();
-                                    pm
-                                }])?;
-
+                                lhs.upsert_data_at_cell_path(&tail_static, rhs)?;
+                                let mut member = member.clone();
+                                member.make_insensitive();
+                                let value = lhs.follow_cell_path(&[member])?;
                                 // Reject attempts to set automatic environment variables.
                                 if is_automatic_env_var(&original_key) {
                                     return Err(ShellError::AutomaticEnvVarSetManually {
@@ -647,13 +638,7 @@ impl Eval for EvalRuntime {
                                     stack.update_config(engine_state)?;
                                 }
                             } else {
-                                let tail_members: Vec<PathMember> = cell_path
-                                    .tail
-                                    .iter()
-                                    .filter_map(|seg| seg.as_static())
-                                    .cloned()
-                                    .collect();
-                                lhs.upsert_data_at_cell_path(&tail_members, rhs)?;
+                                lhs.upsert_data_at_cell_path(&tail_static, rhs)?;
                                 stack.add_var(*var_id, lhs);
                             }
                             Ok(Value::nothing(cell_path.head.span(&engine_state)))

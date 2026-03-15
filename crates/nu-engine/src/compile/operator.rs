@@ -1,7 +1,7 @@
 use nu_protocol::{
     ENV_VARIABLE_ID, IntoSpanned, RegId, Span, Spanned, Value,
     ast::{
-        Assignment, Boolean, CellPath, CellPathSegment, Expr, Expression, Math, Operator,
+        Assignment, Boolean, CellPath, Expr, Expression, Math, Operator, ParsedPathMember,
         PathMember, Pattern,
     },
     engine::StateWorkingSet,
@@ -231,7 +231,7 @@ pub(crate) fn compile_assignment(
                 _,
             ) if *var_id == ENV_VARIABLE_ID => {
                 // This will be an assignment to an environment variable.
-                let Some(CellPathSegment::Static(PathMember::String { val: key, .. })) =
+                let Some(ParsedPathMember::Static(PathMember::String { val: key, .. })) =
                     path.tail.first()
                 else {
                     return Err(CompileError::CannotReplaceEnv { span: lhs.span });

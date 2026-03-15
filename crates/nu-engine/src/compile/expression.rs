@@ -6,7 +6,7 @@ use super::{
 use nu_protocol::{
     ENV_VARIABLE_ID, IN_VARIABLE_ID, IntoSpanned, RegId, Span, Value,
     ast::{
-        CellPath, CellPathSegment, Expr, Expression, ListItem, PathMember, RecordItem,
+        CellPath, Expr, Expression, ListItem, ParsedPathMember, PathMember, RecordItem,
         ValueWithUnit,
     },
     engine::StateWorkingSet,
@@ -487,7 +487,7 @@ pub(crate) fn compile_expression(
             let has_expr_members = full_cell_path
                 .tail
                 .iter()
-                .any(|m| matches!(m, CellPathSegment::Dynamic { .. }));
+                .any(|m| matches!(m, ParsedPathMember::Dynamic { .. }));
             // Use the $env optimization only when all tail members are static; expression
             // members require the general compilation path.
             if matches!(full_cell_path.head.expr, Expr::Var(ENV_VARIABLE_ID))
@@ -617,7 +617,7 @@ fn literal_from_value_with_unit(value_with_unit: &ValueWithUnit) -> Result<Liter
 fn compile_follow_cell_path_tail(
     working_set: &StateWorkingSet,
     builder: &mut BlockBuilder,
-    tail: &[CellPathSegment],
+    tail: &[ParsedPathMember],
     src_dst: RegId,
     span: Span,
 ) -> Result<(), CompileError> {
@@ -640,21 +640,21 @@ fn compile_follow_cell_path_tail(
 
     let mut static_run: Vec<PathMember> = Vec::new();
 
-    for segment in tail {
-        match segment {
-            CellPathSegment::Dynamic {
+    for member in tail {
+        match member {
+            ParsedPathMember::Dynamic {
                 expr,
-                span: expr_span,
+                span,
                 optional,
             } => {
-                flush_static_run(builder, &mut static_run, src_dst, *expr_span)?;
+                flush_static_run(builder, &mut static_run, src_dst, *span)?;
 
                 let path = builder.next_register()?;
                 compile_expression(
                     working_set,
                     builder,
                     expr,
-                    RedirectModes::value(*expr_span),
+                    RedirectModes::value(*span),
                     None,
                     path,
                 )?;
@@ -663,10 +663,10 @@ fn compile_follow_cell_path_tail(
                     path,
                     optional: *optional,
                 }
-                .into_spanned(*expr_span);
+                .into_spanned(*span);
                 builder.push(instruction)?;
             }
-            CellPathSegment::Static(member) => {
+            ParsedPathMember::Static(member) => {
                 static_run.push(member.clone());
             }
         }
