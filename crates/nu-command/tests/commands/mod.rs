@@ -1,5 +1,6 @@
 mod alias;
 mod all;
+mod cell_path;
 mod any;
 mod append;
 mod assignment;
