@@ -471,9 +471,10 @@ fn find_id_in_expr(
                 };
                 let tail: Vec<PathMember> = fcp
                     .tail
-                    .clone()
-                    .into_iter()
-                    .take_while(|pm| pm.span().start <= *location)
+                    .iter()
+                    .take_while(|seg| seg.span().start <= *location)
+                    .filter_map(|seg| seg.as_path_member())
+                    .cloned()
                     .collect();
                 let Some(span) = tail.last().map(|pm| pm.span()) else {
                     return FindMapResult::Stop;

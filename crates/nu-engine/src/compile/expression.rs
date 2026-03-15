@@ -5,7 +5,8 @@ use super::{
 
 use nu_protocol::{
     ENV_VARIABLE_ID, IN_VARIABLE_ID, IntoSpanned, RegId, Span, Value,
-    ast::{CellPath, Expr, Expression, ListItem, PathMember, RecordItem, ValueWithUnit},
+    ast::{CellPath, CellPathSegment, Expr, Expression, ListItem, PathMember, RecordItem,
+        ValueWithUnit},
     engine::StateWorkingSet,
     ir::{DataSlice, Instruction, Literal},
 };
@@ -484,13 +485,19 @@ pub(crate) fn compile_expression(
             let has_expr_members = full_cell_path
                 .tail
                 .iter()
-                .any(|m| matches!(m, PathMember::Expression { .. }));
+                .any(|m| matches!(m, CellPathSegment::Dynamic { .. }));
             // Use the $env optimization only when all tail members are static; expression
             // members require the general compilation path.
             if matches!(full_cell_path.head.expr, Expr::Var(ENV_VARIABLE_ID))
                 && !has_expr_members
             {
-                compile_load_env(builder, expr.span, &full_cell_path.tail, out_reg)
+                let static_tail: Vec<PathMember> = full_cell_path
+                    .tail
+                    .iter()
+                    .filter_map(|seg| seg.as_path_member())
+                    .cloned()
+                    .collect();
+                compile_load_env(builder, expr.span, &static_tail, out_reg)
             } else {
                 compile_expression(
                     working_set,
@@ -608,12 +615,12 @@ fn literal_from_value_with_unit(value_with_unit: &ValueWithUnit) -> Result<Liter
     }
 }
 
-/// Compile a sequence of cell path tail members, emitting `FollowCellPath` for static runs and
-/// `FollowCellPathDynamic` for expression members.
+/// Compile a sequence of cell path tail segments, emitting `FollowCellPath` for static runs and
+/// `FollowCellPathDynamic` for dynamic segments.
 fn compile_follow_cell_path_tail(
     working_set: &StateWorkingSet,
     builder: &mut BlockBuilder,
-    tail: &[PathMember],
+    tail: &[CellPathSegment],
     src_dst: RegId,
     span: Span,
 ) -> Result<(), CompileError> {
@@ -636,33 +643,35 @@ fn compile_follow_cell_path_tail(
 
     let mut static_run: Vec<PathMember> = Vec::new();
 
-    for tail_member in tail {
-        if let PathMember::Expression {
-            expr,
-            span: expr_span,
-            optional,
-        } = tail_member
-        {
-            flush_static_run(builder, &mut static_run, src_dst, *expr_span)?;
-
-            let path = builder.next_register()?;
-            compile_expression(
-                working_set,
-                builder,
+    for segment in tail {
+        match segment {
+            CellPathSegment::Dynamic {
                 expr,
-                RedirectModes::value(*expr_span),
-                None,
-                path,
-            )?;
-            let instruction = Instruction::FollowCellPathDynamic {
-                src_dst,
-                path,
-                optional: *optional,
+                span: expr_span,
+                optional,
+            } => {
+                flush_static_run(builder, &mut static_run, src_dst, *expr_span)?;
+
+                let path = builder.next_register()?;
+                compile_expression(
+                    working_set,
+                    builder,
+                    expr,
+                    RedirectModes::value(*expr_span),
+                    None,
+                    path,
+                )?;
+                let instruction = Instruction::FollowCellPathDynamic {
+                    src_dst,
+                    path,
+                    optional: *optional,
+                }
+                .into_spanned(*expr_span);
+                builder.push(instruction)?;
             }
-            .into_spanned(*expr_span);
-            builder.push(instruction)?;
-        } else {
-            static_run.push(tail_member.clone());
+            CellPathSegment::Static(member) => {
+                static_run.push(member.clone());
+            }
         }
     }
 

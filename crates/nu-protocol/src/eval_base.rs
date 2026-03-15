@@ -4,9 +4,10 @@ use nu_path::expand_path;
 use crate::{
     BlockId, Config, ENV_VARIABLE_ID, GetSpan, Range, Record, ShellError, Span, Value, VarId,
     ast::{
-        Assignment, Bits, Boolean, Call, Comparison, Expr, Expression, ExternalArgument, ListItem,
-        Math, Operator, RecordItem, eval_operator,
+        Assignment, Bits, Boolean, Call, CellPathSegment, Comparison, Expr, Expression,
+        ExternalArgument, ListItem, Math, Operator, PathMember, RecordItem, eval_operator,
     },
+    casing::Casing,
     debugger::DebugContext,
 };
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
@@ -59,16 +60,48 @@ pub trait Eval {
 
                 // Cell paths are usually case-sensitive, but we give $env
                 // special treatment.
-                let tail = if cell_path.head.expr == Expr::Var(ENV_VARIABLE_ID) {
-                    let mut tail = cell_path.tail.clone();
-                    if let Some(pm) = tail.first_mut() {
-                        pm.make_insensitive();
+                let is_env = cell_path.head.expr == Expr::Var(ENV_VARIABLE_ID);
+                let mut members: Vec<PathMember> = Vec::with_capacity(cell_path.tail.len());
+                for (i, segment) in cell_path.tail.iter().enumerate() {
+                    let mut member = match segment {
+                        CellPathSegment::Static(m) => m.clone(),
+                        CellPathSegment::Dynamic { expr, span, optional } => {
+                            let val = Self::eval::<D>(state, mut_state, expr)?;
+                            match val {
+                                Value::Int { val, .. } => {
+                                    let idx = usize::try_from(val).map_err(|_| {
+                                        ShellError::TypeMismatch {
+                                            err_message: "cell path index must be non-negative"
+                                                .into(),
+                                            span: *span,
+                                        }
+                                    })?;
+                                    PathMember::Int { val: idx, span: *span, optional: *optional }
+                                }
+                                Value::String { val, .. } => PathMember::String {
+                                    val,
+                                    span: *span,
+                                    optional: *optional,
+                                    casing: Casing::Sensitive,
+                                },
+                                other => {
+                                    return Err(ShellError::TypeMismatch {
+                                        err_message: format!(
+                                            "cell path member must be int or string, got {}",
+                                            other.get_type()
+                                        ),
+                                        span: *span,
+                                    })
+                                }
+                            }
+                        }
+                    };
+                    if is_env && i == 0 {
+                        member.make_insensitive();
                     }
-                    Cow::Owned(tail)
-                } else {
-                    Cow::Borrowed(&cell_path.tail)
-                };
-                value.follow_cell_path(&tail).map(Cow::into_owned)
+                    members.push(member);
+                }
+                value.follow_cell_path(&members).map(Cow::into_owned)
             }
             Expr::DateTime(dt) => Ok(Value::date(*dt, expr_span)),
             Expr::List(list) => {

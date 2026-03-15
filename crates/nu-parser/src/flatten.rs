@@ -1,9 +1,9 @@
 use nu_protocol::{
     DeclId, GetSpan, Span, SyntaxShape, VarId,
     ast::{
-        Argument, Block, Expr, Expression, ExternalArgument, ImportPatternMember, ListItem,
-        MatchPattern, PathMember, Pattern, Pipeline, PipelineElement, PipelineRedirection,
-        RecordItem,
+        Argument, Block, CellPathSegment, Expr, Expression, ExternalArgument, ImportPatternMember,
+        ListItem, MatchPattern, PathMember, Pattern, Pipeline, PipelineElement,
+        PipelineRedirection, RecordItem,
     },
     engine::StateWorkingSet,
 };
@@ -181,15 +181,26 @@ fn flatten_positional_arg_into(
     }
 }
 
-fn push_path_member(
-    working_set: &StateWorkingSet,
-    member: &PathMember,
-    output: &mut Vec<(Span, FlatShape)>,
-) {
+fn push_path_member(member: &PathMember, output: &mut Vec<(Span, FlatShape)>) {
     match member {
         PathMember::String { span, .. } => output.push((*span, FlatShape::String)),
         PathMember::Int { span, .. } => output.push((*span, FlatShape::Int)),
-        PathMember::Expression { expr, .. } => flatten_expression_into(working_set, expr, output),
+    }
+}
+
+fn push_cell_path_segment(
+    working_set: &StateWorkingSet,
+    segment: &CellPathSegment,
+    output: &mut Vec<(Span, FlatShape)>,
+) {
+    match segment {
+        CellPathSegment::Static(PathMember::String { span, .. }) => {
+            output.push((*span, FlatShape::String))
+        }
+        CellPathSegment::Static(PathMember::Int { span, .. }) => {
+            output.push((*span, FlatShape::Int))
+        }
+        CellPathSegment::Dynamic { expr, .. } => flatten_expression_into(working_set, expr, output),
     }
 }
 
@@ -385,13 +396,13 @@ fn flatten_expression_into(
         }
         Expr::CellPath(cell_path) => {
             for member in &cell_path.members {
-                push_path_member(working_set, member, output);
+                push_path_member(member, output);
             }
         }
         Expr::FullCellPath(cell_path) => {
             flatten_expression_into(working_set, &cell_path.head, output);
-            for member in &cell_path.tail {
-                push_path_member(working_set, member, output);
+            for segment in &cell_path.tail {
+                push_cell_path_segment(working_set, segment, output);
             }
         }
         Expr::ImportPattern(import_pattern) => {

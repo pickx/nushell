@@ -1,6 +1,7 @@
 use nu_protocol::{
     ENV_VARIABLE_ID, IntoSpanned, RegId, Span, Spanned, Value,
-    ast::{Assignment, Boolean, CellPath, Expr, Expression, Math, Operator, PathMember, Pattern},
+    ast::{Assignment, Boolean, CellPath, CellPathSegment, Expr, Expression, Math, Operator,
+        PathMember, Pattern},
     engine::StateWorkingSet,
     ir::{Instruction, Literal},
 };
@@ -228,7 +229,9 @@ pub(crate) fn compile_assignment(
                 _,
             ) if *var_id == ENV_VARIABLE_ID => {
                 // This will be an assignment to an environment variable.
-                let Some(PathMember::String { val: key, .. }) = path.tail.first() else {
+                let Some(CellPathSegment::Static(PathMember::String { val: key, .. })) =
+                    path.tail.first()
+                else {
                     return Err(CompileError::CannotReplaceEnv { span: lhs.span });
                 };
 
@@ -271,9 +274,14 @@ pub(crate) fn compile_assignment(
 
                     // Do the upsert on the current value to incorporate rhs
                     builder.set_label(upsert_label, builder.here())?;
+                    let tail_members: Vec<PathMember> = path.tail[1..]
+                        .iter()
+                        .filter_map(|seg| seg.as_path_member())
+                        .cloned()
+                        .collect();
                     compile_upsert_cell_path(
                         builder,
-                        (&path.tail[1..]).into_spanned(lhs.span),
+                        tail_members.as_slice().into_spanned(lhs.span),
                         head_reg,
                         rhs_reg,
                         assignment_span,
@@ -316,9 +324,15 @@ pub(crate) fn compile_assignment(
                 )?;
 
                 // Upsert the tail of the path into the old value of the head expression
+                let tail_members: Vec<PathMember> = path
+                    .tail
+                    .iter()
+                    .filter_map(|seg| seg.as_path_member())
+                    .cloned()
+                    .collect();
                 compile_upsert_cell_path(
                     builder,
-                    path.tail.as_slice().into_spanned(lhs.span),
+                    tail_members.as_slice().into_spanned(lhs.span),
                     head_reg,
                     rhs_reg,
                     assignment_span,
@@ -408,9 +422,6 @@ pub(crate) fn compile_load_env(
                     .into_spanned(span),
                 )?;
             }
-        }
-        [PathMember::Expression { .. }, ..] => {
-            unreachable!("expression path members should be compiled away before runtime")
         }
     }
     Ok(())

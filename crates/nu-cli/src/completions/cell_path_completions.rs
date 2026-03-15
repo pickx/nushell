@@ -4,7 +4,7 @@ use crate::completions::{Completer, CompletionOptions, SemanticSuggestion};
 use nu_engine::{column::get_columns, eval_variable};
 use nu_protocol::{
     ShellError, Span, SuggestionKind, Type, Value,
-    ast::{Expr, Expression, FullCellPath, PathMember},
+    ast::{CellPathSegment, Expr, Expression, FullCellPath, PathMember},
     engine::{Stack, StateWorkingSet},
     eval_const::eval_constant,
 };
@@ -17,16 +17,19 @@ pub struct CellPathCompletion<'a> {
     pub position: usize,
 }
 
-fn prefix_from_path_member(member: &PathMember, pos: usize) -> (String, Span) {
-    let (prefix_str, start) = match member {
-        PathMember::String { val, span, .. } => (val, span.start),
-        PathMember::Int { val, span, .. } => (&val.to_string(), span.start),
-        PathMember::Expression { .. } => {
-            unreachable!("expression path members should be compiled away before runtime")
+fn prefix_from_cell_path_segment(segment: &CellPathSegment, pos: usize) -> (String, Span) {
+    let (prefix_str, start) = match segment {
+        CellPathSegment::Static(PathMember::String { val, span, .. }) => (val.clone(), span.start),
+        CellPathSegment::Static(PathMember::Int { val, span, .. }) => {
+            (val.to_string(), span.start)
         }
+        CellPathSegment::Dynamic { span, .. } => (String::new(), span.start),
     };
-    let prefix_str = prefix_str.get(..pos + 1 - start).unwrap_or(prefix_str);
-    (prefix_str.to_string(), Span::new(start, pos + 1))
+    let prefix_str = prefix_str
+        .get(..pos + 1 - start)
+        .unwrap_or(&prefix_str)
+        .to_string();
+    (prefix_str, Span::new(start, pos + 1))
 }
 
 impl Completer for CellPathCompletion<'_> {
@@ -43,11 +46,11 @@ impl Completer for CellPathCompletion<'_> {
         // position at dots, e.g. `$env.config.<TAB>`
         let mut span = Span::new(self.position + 1, self.position + 1);
         let mut path_member_num_before_pos = 0;
-        for member in self.full_cell_path.tail.iter() {
-            if member.span().end <= self.position {
+        for segment in self.full_cell_path.tail.iter() {
+            if segment.span().end <= self.position {
                 path_member_num_before_pos += 1;
-            } else if member.span().contains(self.position) {
-                (prefix_str, span) = prefix_from_path_member(member, self.position);
+            } else if segment.span().contains(self.position) {
+                (prefix_str, span) = prefix_from_cell_path_segment(segment, self.position);
                 break;
             }
         }
@@ -58,16 +61,20 @@ impl Completer for CellPathCompletion<'_> {
         };
 
         let mut matcher = NuMatcher::new(prefix_str, options, true);
-        let path_members = self
+        let path_members: Vec<PathMember> = self
             .full_cell_path
             .tail
             .get(0..path_member_num_before_pos)
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|seg| seg.as_path_member())
+            .cloned()
+            .collect();
         let value = eval_cell_path(
             working_set,
             stack,
             &self.full_cell_path.head,
-            path_members,
+            &path_members,
             span,
         );
 
@@ -75,7 +82,7 @@ impl Completer for CellPathCompletion<'_> {
             for suggestion in get_suggestions_by_value(&value, current_span) {
                 matcher.add_semantic_suggestion(suggestion);
             }
-        } else if let Some(ty) = self.full_cell_path.head.ty.follow_cell_path(path_members) {
+        } else if let Some(ty) = self.full_cell_path.head.ty.follow_cell_path(&path_members) {
             for suggestion in get_suggestions_by_type(&ty, current_span) {
                 matcher.add_semantic_suggestion(suggestion);
             }

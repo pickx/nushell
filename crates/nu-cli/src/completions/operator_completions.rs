@@ -3,7 +3,7 @@ use crate::completions::{
 };
 use nu_protocol::{
     ENV_VARIABLE_ID, Span, SuggestionKind, Type, Value,
-    ast::{self, Comparison, Expr, Expression},
+    ast::{self, CellPathSegment, Comparison, Expr, Expression, PathMember},
     engine::{Stack, StateWorkingSet},
 };
 use reedline::Suggestion;
@@ -234,8 +234,14 @@ impl Completer for OperatorCompletion<'_> {
                     if let Expr::Garbage = path.head.expr {
                         return vec![];
                     }
+                    let tail_members: Vec<PathMember> = path
+                        .tail
+                        .iter()
+                        .filter_map(|seg| seg.as_path_member())
+                        .cloned()
+                        .collect();
                     let value =
-                        eval_cell_path(working_set, stack, &path.head, &path.tail, path.head.span)
+                        eval_cell_path(working_set, stack, &path.head, &tail_members, path.head.span)
                             .unwrap_or_default();
                     let mutable = is_expression_mutable(&self.left_hand_side.expr, working_set);
                     // to avoid duplication

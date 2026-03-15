@@ -244,9 +244,6 @@ fn reject(
             match k.members[0] {
                 PathMember::Int { val, .. } => val,
                 PathMember::String { .. } => usize::MIN,
-                PathMember::Expression { .. } => {
-                    unreachable!("expression path members should be compiled away before runtime")
-                }
             }
         })
     });

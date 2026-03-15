@@ -2528,7 +2528,7 @@ pub fn parse_cell_path(
     working_set: &mut StateWorkingSet,
     tokens: impl Iterator<Item = Token>,
     expect_dot: bool,
-) -> Vec<PathMember> {
+) -> Vec<CellPathSegment> {
     enum TokenType {
         Dot,              // .
         DotOrSign,        // . or ? or !
@@ -2642,7 +2642,7 @@ pub fn parse_cell_path(
 fn parse_cell_path_member_literal(
     working_set: &mut StateWorkingSet,
     span: Span,
-) -> Result<PathMember, ParseError> {
+) -> Result<CellPathSegment, ParseError> {
     let starting_error_count = working_set.parse_errors.len();
     let expr = parse_int(working_set, span);
     working_set.parse_errors.truncate(starting_error_count);
@@ -2651,11 +2651,11 @@ fn parse_cell_path_member_literal(
             expr: Expr::Int(val),
             span,
             ..
-        } => parse_index(val, span).map(|val| PathMember::Int {
+        } => parse_index(val, span).map(|val| CellPathSegment::Static(PathMember::Int {
             val,
             span,
             optional: false,
-        }),
+        })),
         _ => {
             let result = parse_string(working_set, span);
             match result {
@@ -2663,12 +2663,12 @@ fn parse_cell_path_member_literal(
                     expr: Expr::String(string),
                     span,
                     ..
-                } => Ok(PathMember::String {
+                } => Ok(CellPathSegment::Static(PathMember::String {
                     val: string,
                     span,
                     optional: false,
                     casing: Casing::Sensitive,
-                }),
+                })),
                 _ => Err(ParseError::Expected("int or string", span)),
             }
         }
@@ -2679,24 +2679,26 @@ fn parse_cell_path_member_literal(
 fn parse_cell_path_member_subexpression(
     working_set: &mut StateWorkingSet,
     outer_span: Span,
-) -> Result<PathMember, ParseError> {
+) -> Result<CellPathSegment, ParseError> {
     let subexpression = parse_subexpression(working_set, outer_span);
 
-    fn check_value_type(value: Value) -> Result<PathMember, ParseError> {
+    fn check_value_type(value: Value) -> Result<CellPathSegment, ParseError> {
         let span = value.span();
         match value {
-            Value::Int { val, .. } => parse_index(val, span).map(|val| PathMember::Int {
-                val,
-                span,
-                optional: false,
+            Value::Int { val, .. } => parse_index(val, span).map(|val| {
+                CellPathSegment::Static(PathMember::Int {
+                    val,
+                    span,
+                    optional: false,
+                })
             }),
 
-            Value::String { val, .. } => Ok(PathMember::String {
+            Value::String { val, .. } => Ok(CellPathSegment::Static(PathMember::String {
                 val,
                 span,
                 casing: Casing::Sensitive,
                 optional: false,
-            }),
+            })),
 
             _ => Err(ParseError::Expected(
                 "subexpression of type int or string",
@@ -2708,7 +2710,7 @@ fn parse_cell_path_member_subexpression(
     match eval_constant(working_set, &subexpression) {
         Ok(value) => check_value_type(value),
         Err(ShellError::NotAConstant { .. } | ShellError::NotAConstCommand { .. }) => {
-            Ok(PathMember::Expression {
+            Ok(CellPathSegment::Dynamic {
                 expr: Box::new(subexpression),
                 span: outer_span,
                 optional: false,
@@ -2736,10 +2738,20 @@ pub fn parse_simple_cell_path(working_set: &mut StateWorkingSet, span: Span) -> 
     let tokens = tokens.into_iter().peekable();
 
     let cell_path = parse_cell_path(working_set, tokens, false);
+    let members = cell_path
+        .into_iter()
+        .filter_map(|seg| {
+            if let CellPathSegment::Static(m) = seg {
+                Some(m)
+            } else {
+                None
+            }
+        })
+        .collect();
 
     Expression::new(
         working_set,
-        Expr::CellPath(CellPath { members: cell_path }),
+        Expr::CellPath(CellPath { members }),
         span,
         Type::CellPath,
     )
@@ -2852,8 +2864,13 @@ pub fn parse_full_cell_path(
         let tail = parse_cell_path(working_set, tokens, expect_dot);
         let ty = if !tail.is_empty() {
             if nu_experimental::CELL_PATH_TYPES.get() {
+                let static_members: Vec<PathMember> = tail
+                    .iter()
+                    .filter_map(|seg| seg.as_path_member())
+                    .cloned()
+                    .collect();
                 head.ty
-                    .follow_cell_path(&tail)
+                    .follow_cell_path(&static_members)
                     .map(|ty| ty.into_owned())
                     .unwrap_or(Type::Any)
             } else {
