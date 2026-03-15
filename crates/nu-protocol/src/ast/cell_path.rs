@@ -25,6 +25,13 @@ pub enum PathMember {
         /// (e.g. return `Value::Nothing`)
         optional: bool,
     },
+    /// Accessing a member by a runtime expression (evaluated to int or string at runtime).
+    /// Only valid in the AST; compiled away before runtime evaluation.
+    Expression {
+        expr: Box<Expression>,
+        span: Span,
+        optional: bool,
+    },
 }
 
 impl PathMember {
@@ -66,6 +73,7 @@ impl PathMember {
         match self {
             PathMember::String { optional, .. } => *optional = true,
             PathMember::Int { optional, .. } => *optional = true,
+            PathMember::Expression { optional, .. } => *optional = true,
         }
     }
 
@@ -73,6 +81,7 @@ impl PathMember {
         match self {
             PathMember::String { casing, .. } => *casing = Casing::Insensitive,
             PathMember::Int { .. } => {}
+            PathMember::Expression { .. } => {}
         }
     }
 
@@ -80,6 +89,7 @@ impl PathMember {
         match self {
             PathMember::String { span, .. } => *span,
             PathMember::Int { span, .. } => *span,
+            PathMember::Expression { span, .. } => *span,
         }
     }
 
@@ -88,6 +98,7 @@ impl PathMember {
         match self {
             PathMember::String { val, .. } => std::mem::size_of::<Self>() + val.capacity(),
             PathMember::Int { .. } => std::mem::size_of::<Self>(),
+            PathMember::Expression { .. } => std::mem::size_of::<Self>(),
         }
     }
 }
@@ -119,6 +130,22 @@ impl PartialEq for PathMember {
                     ..
                 },
             ) => l_val == r_val && l_opt == r_opt,
+            (
+                Self::Expression {
+                    span: l_span,
+                    optional: l_opt,
+                    ..
+                },
+                Self::Expression {
+                    span: r_span,
+                    optional: r_opt,
+                    ..
+                },
+            ) => {
+                // We can't know value equality without evaluating the expression, so
+                // we use span as a proxy for identity (same source location = same expression).
+                l_span == r_span && l_opt == r_opt
+            }
             _ => false,
         }
     }
@@ -169,6 +196,9 @@ impl PartialOrd for PathMember {
             }
             (PathMember::Int { .. }, PathMember::String { .. }) => Some(Ordering::Greater),
             (PathMember::String { .. }, PathMember::Int { .. }) => Some(Ordering::Less),
+            // Expression members are not meaningfully orderable since we can't know the
+            // runtime value at parse time.
+            (PathMember::Expression { .. }, _) | (_, PathMember::Expression { .. }) => None,
         }
     }
 }
@@ -215,6 +245,11 @@ impl CellPath {
                 PathMember::String { val, .. } => {
                     s += val;
                 }
+                // Expression members are compiled away before runtime; this is unreachable
+                // in practice. We can't recover the source text without a working set.
+                PathMember::Expression { .. } => {
+                    s += "(expr)";
+                }
             }
 
             s.push('.');
@@ -257,6 +292,10 @@ impl Display for CellPath {
                         val
                     };
                     write!(f, ".{val}{exclamation_mark}{question_mark}")?
+                }
+                PathMember::Expression { optional, .. } => {
+                    let question_mark = if *optional { "?" } else { "" };
+                    write!(f, ".(expr){question_mark}")?
                 }
             }
         }

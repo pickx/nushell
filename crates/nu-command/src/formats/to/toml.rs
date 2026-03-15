@@ -103,6 +103,9 @@ fn helper(
                 .map(|x| match &x {
                     PathMember::String { val, .. } => Ok(toml::Value::String(val.clone())),
                     PathMember::Int { val, .. } => Ok(toml::Value::Integer(*val as i64)),
+                    PathMember::Expression { .. } => {
+                        unreachable!("expression path members should be compiled away before runtime")
+                    }
                 })
                 .collect::<Result<Vec<toml::Value>, ShellError>>()?,
         ),

@@ -215,6 +215,13 @@ pub enum Instruction {
     },
     /// Follow a cell path on the value in `src_dst`, storing the result back to `src_dst`
     FollowCellPath { src_dst: RegId, path: RegId },
+    /// Follow a single dynamically-computed cell path member on the value in `src_dst`.
+    /// `member` must be a `Value::Int` (list index) or `Value::String` (record key).
+    FollowCellPathDynamic {
+        src_dst: RegId,
+        path: RegId,
+        optional: bool,
+    },
     /// Clone the value at a cell path in `src`, storing the result to `dst`. The original value
     /// remains in `src`. Must be a collected value.
     CloneCellPath { dst: RegId, src: RegId, path: RegId },
@@ -331,7 +338,8 @@ impl Instruction {
             Instruction::RecordSpread { src_dst, .. } => Some(src_dst),
             Instruction::Not { src_dst } => Some(src_dst),
             Instruction::BinaryOp { lhs_dst, .. } => Some(lhs_dst),
-            Instruction::FollowCellPath { src_dst, .. } => Some(src_dst),
+            Instruction::FollowCellPath { src_dst, .. }
+            | Instruction::FollowCellPathDynamic { src_dst, .. } => Some(src_dst),
             Instruction::CloneCellPath { dst, .. } => Some(dst),
             Instruction::UpsertCellPath { src_dst, .. } => Some(src_dst),
             Instruction::Jump { .. } => None,

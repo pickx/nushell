@@ -278,6 +278,9 @@ pub(crate) fn write_value(
                     PathMember::Int { val, .. } => {
                         mp::write_uint(out, *val as u64).err_span(span)?;
                     }
+                    PathMember::Expression { .. } => {
+                        unreachable!("expression path members should be compiled away before runtime")
+                    }
                 }
             }
         }

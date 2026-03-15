@@ -409,6 +409,9 @@ pub(crate) fn compile_load_env(
                 )?;
             }
         }
+        [PathMember::Expression { .. }, ..] => {
+            unreachable!("expression path members should be compiled away before runtime")
+        }
     }
     Ok(())
 }

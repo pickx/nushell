@@ -21,6 +21,9 @@ fn prefix_from_path_member(member: &PathMember, pos: usize) -> (String, Span) {
     let (prefix_str, start) = match member {
         PathMember::String { val, span, .. } => (val, span.start),
         PathMember::Int { val, span, .. } => (&val.to_string(), span.start),
+        PathMember::Expression { .. } => {
+            unreachable!("expression path members should be compiled away before runtime")
+        }
     };
     let prefix_str = prefix_str.get(..pos + 1 - start).unwrap_or(prefix_str);
     (prefix_str.to_string(), Span::new(start, pos + 1))

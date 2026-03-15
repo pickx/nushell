@@ -5,7 +5,7 @@ use super::{
 
 use nu_protocol::{
     ENV_VARIABLE_ID, IN_VARIABLE_ID, IntoSpanned, RegId, Span, Value,
-    ast::{CellPath, Expr, Expression, ListItem, RecordItem, ValueWithUnit},
+    ast::{CellPath, Expr, Expression, ListItem, PathMember, RecordItem, ValueWithUnit},
     engine::StateWorkingSet,
     ir::{DataSlice, Instruction, Literal},
 };
@@ -481,7 +481,15 @@ pub(crate) fn compile_expression(
         }
         Expr::CellPath(path) => lit(builder, Literal::CellPath(Box::new(path.clone()))),
         Expr::FullCellPath(full_cell_path) => {
-            if matches!(full_cell_path.head.expr, Expr::Var(ENV_VARIABLE_ID)) {
+            let has_expr_members = full_cell_path
+                .tail
+                .iter()
+                .any(|m| matches!(m, PathMember::Expression { .. }));
+            // Use the $env optimization only when all tail members are static; expression
+            // members require the general compilation path.
+            if matches!(full_cell_path.head.expr, Expr::Var(ENV_VARIABLE_ID))
+                && !has_expr_members
+            {
                 compile_load_env(builder, expr.span, &full_cell_path.tail, out_reg)
             } else {
                 compile_expression(
@@ -500,20 +508,13 @@ pub(crate) fn compile_expression(
                     in_reg,
                     out_reg,
                 )?;
-                // Only do the follow if this is actually needed
                 if !full_cell_path.tail.is_empty() {
-                    let cell_path_reg = builder.literal(
-                        Literal::CellPath(Box::new(CellPath {
-                            members: full_cell_path.tail.clone(),
-                        }))
-                        .into_spanned(expr.span),
-                    )?;
-                    builder.push(
-                        Instruction::FollowCellPath {
-                            src_dst: out_reg,
-                            path: cell_path_reg,
-                        }
-                        .into_spanned(expr.span),
+                    compile_follow_cell_path_tail(
+                        working_set,
+                        builder,
+                        &full_cell_path.tail,
+                        out_reg,
+                        expr.span,
                     )?;
                 }
                 Ok(())
@@ -605,4 +606,67 @@ fn literal_from_value_with_unit(value_with_unit: &ValueWithUnit) -> Result<Liter
             span: value_with_unit.unit.span,
         }),
     }
+}
+
+/// Compile a sequence of cell path tail members, emitting `FollowCellPath` for static runs and
+/// `FollowCellPathDynamic` for expression members.
+fn compile_follow_cell_path_tail(
+    working_set: &StateWorkingSet,
+    builder: &mut BlockBuilder,
+    tail: &[PathMember],
+    src_dst: RegId,
+    span: Span,
+) -> Result<(), CompileError> {
+    fn flush_static_run(
+        builder: &mut BlockBuilder,
+        static_run: &mut Vec<PathMember>,
+        src_dst: RegId,
+        span: Span,
+    ) -> Result<(), CompileError> {
+        if !static_run.is_empty() {
+            let members = std::mem::take(static_run);
+            let cell_path = CellPath { members };
+            let literal = Literal::CellPath(Box::new(cell_path)).into_spanned(span);
+            let path = builder.literal(literal)?;
+            let instruction = Instruction::FollowCellPath { src_dst, path }.into_spanned(span);
+            builder.push(instruction)?;
+        }
+        Ok(())
+    }
+
+    let mut static_run: Vec<PathMember> = Vec::new();
+
+    for tail_member in tail {
+        if let PathMember::Expression {
+            expr,
+            span: expr_span,
+            optional,
+        } = tail_member
+        {
+            flush_static_run(builder, &mut static_run, src_dst, *expr_span)?;
+
+            let path = builder.next_register()?;
+            compile_expression(
+                working_set,
+                builder,
+                expr,
+                RedirectModes::value(*expr_span),
+                None,
+                path,
+            )?;
+            let instruction = Instruction::FollowCellPathDynamic {
+                src_dst,
+                path,
+                optional: *optional,
+            }
+            .into_spanned(*expr_span);
+            builder.push(instruction)?;
+        } else {
+            static_run.push(tail_member.clone());
+        }
+    }
+
+    flush_static_run(builder, &mut static_run, src_dst, span)?;
+
+    Ok(())
 }

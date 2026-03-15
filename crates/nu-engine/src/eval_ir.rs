@@ -7,7 +7,8 @@ use nu_protocol::{
     DeclId, ENV_VARIABLE_ID, Flag, IntoPipelineData, IntoSpanned, ListStream, OutDest,
     PipelineData, PipelineExecutionData, PositionalArg, Range, Record, RegId, ShellError, Signals,
     Signature, Span, Spanned, Type, Value, VarId,
-    ast::{Bits, Block, Boolean, CellPath, Comparison, Math, Operator},
+    ast::{Bits, Block, Boolean, CellPath, Comparison, Math, Operator, PathMember},
+    casing::Casing,
     combined_type_string,
     debugger::DebugContext,
     engine::{
@@ -811,6 +812,49 @@ fn eval_instruction<D: DebugContext>(
                     span: path.span().unwrap_or(*span),
                 })
             }
+        }
+        Instruction::FollowCellPathDynamic {
+            src_dst,
+            path,
+            optional,
+        } => {
+            let data = ctx.take_reg(*src_dst);
+            let path_val = ctx.take_reg(*path);
+            let path_val = path_val.body.into_value(*span)?;
+            let path_member = match path_val {
+                Value::Int { val, .. } => {
+                    let idx = usize::try_from(val).map_err(|_| ShellError::TypeMismatch {
+                        err_message: "non-negative integer".into(),
+                        span: *span,
+                    })?;
+                    PathMember::Int {
+                        val: idx,
+                        span: *span,
+                        optional: *optional,
+                    }
+                }
+                Value::String { val, .. } => PathMember::String {
+                    val,
+                    span: *span,
+                    optional: *optional,
+                    casing: Casing::Sensitive,
+                },
+                other => {
+                    return Err(ShellError::TypeMismatch {
+                        err_message: format!(
+                            "expected int or string for cell path member, got {}",
+                            other.get_type()
+                        ),
+                        span: other.span(),
+                    });
+                }
+            };
+            let value = data.body.follow_cell_path(&[path_member], *span)?;
+            ctx.put_reg(
+                *src_dst,
+                PipelineExecutionData::from(value.into_pipeline_data()),
+            );
+            Ok(Continue)
         }
         Instruction::CloneCellPath { dst, src, path } => {
             let value = ctx.clone_reg_value(*src, *span)?;

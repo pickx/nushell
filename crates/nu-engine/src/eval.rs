@@ -548,6 +548,12 @@ impl Eval for EvalRuntime {
                                 let (key, span) = match &cell_path.tail[0] {
                                     PathMember::String { val, span, .. } => (val.to_string(), span),
                                     PathMember::Int { val, span, .. } => (val.to_string(), span),
+                                    PathMember::Expression { span, .. } => {
+                                        return Err(ShellError::TypeMismatch {
+                                            err_message: "cannot assign to $env with a dynamic cell path member".into(),
+                                            span: *span,
+                                        })
+                                    }
                                 };
                                 let original_key = if let Value::Record { val: record, .. } = &lhs {
                                     record

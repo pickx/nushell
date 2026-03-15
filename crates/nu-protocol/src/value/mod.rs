@@ -1318,6 +1318,9 @@ impl Value {
                         });
                     }
                 },
+                PathMember::Expression { .. } => {
+                    unreachable!("expression path members should be compiled away before runtime")
+                }
             }
         } else {
             *self = new_val;
@@ -1437,6 +1440,9 @@ impl Value {
                         });
                     }
                 },
+                PathMember::Expression { .. } => {
+                    unreachable!("expression path members should be compiled away before runtime")
+                }
             }
         } else {
             *self = new_val;
@@ -1529,6 +1535,9 @@ impl Value {
                             src_span: v.span(),
                         }),
                     },
+                    PathMember::Expression { .. } => {
+                        unreachable!("expression path members should be compiled away before runtime")
+                    }
                 }
             }
             [member, path @ ..] => {
@@ -1611,6 +1620,9 @@ impl Value {
                             src_span: v.span(),
                         }),
                     },
+                    PathMember::Expression { .. } => {
+                        unreachable!("expression path members should be compiled away before runtime")
+                    }
                 }
             }
         }
@@ -1730,6 +1742,9 @@ impl Value {
                         });
                     }
                 },
+                PathMember::Expression { .. } => {
+                    unreachable!("expression path members should be compiled away before runtime")
+                }
             }
         } else {
             *self = new_val;
@@ -1760,6 +1775,9 @@ impl Value {
                             span,
                         })
                     }
+                }
+                PathMember::Expression { .. } => {
+                    unreachable!("expression path members should be compiled away before runtime")
                 }
             }
         } else {
@@ -2337,6 +2355,9 @@ fn get_value_member<'a>(
                     span: *origin_span,
                 }),
             }
+        }
+        PathMember::Expression { .. } => {
+            unreachable!("expression path members should be compiled away before runtime")
         }
     }
 }

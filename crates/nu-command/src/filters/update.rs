@@ -264,6 +264,9 @@ fn update_value_by_closure(
     let is_optional = cell_path.iter().any(|member| match member {
         PathMember::String { optional, .. } => *optional,
         PathMember::Int { optional, .. } => *optional,
+        PathMember::Expression { .. } => {
+            unreachable!("expression path members should be compiled away before runtime")
+        }
     });
     if is_optional && matches!(value_at_path.as_ref(), Value::Nothing { .. }) {
         return Ok(());
@@ -290,6 +293,9 @@ fn update_single_value_by_closure(
     let is_optional = cell_path.iter().any(|member| match member {
         PathMember::String { optional, .. } => *optional,
         PathMember::Int { optional, .. } => *optional,
+        PathMember::Expression { .. } => {
+            unreachable!("expression path members should be compiled away before runtime")
+        }
     });
     if is_optional && matches!(value_at_path.as_ref(), Value::Nothing { .. }) {
         return Ok(());

@@ -139,10 +139,16 @@ fn split_cell_path(val: CellPath, span: Span) -> Result<Value, ShellError> {
                     ..
                 } => (optional, casing == Casing::Insensitive, span),
                 PathMember::Int { optional, span, .. } => (optional, false, span),
+                PathMember::Expression { .. } => {
+                    unreachable!("expression path members should be compiled away before runtime")
+                }
             };
             let value = match pm {
                 PathMember::String { val, .. } => Value::string(val, internal_span),
                 PathMember::Int { val, .. } => Value::int(val as i64, internal_span),
+                PathMember::Expression { .. } => {
+                    unreachable!("expression path members should be compiled away before runtime")
+                }
             };
             Self {
                 value,
@@ -158,6 +164,9 @@ fn split_cell_path(val: CellPath, span: Span) -> Result<Value, ShellError> {
         .map(|pm| {
             let span = match pm {
                 PathMember::String { span, .. } | PathMember::Int { span, .. } => span,
+                PathMember::Expression { .. } => {
+                    unreachable!("expression path members should be compiled away before runtime")
+                }
             };
             PathMemberRecord::from_path_member(pm).into_value(span)
         })

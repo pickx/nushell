@@ -64,6 +64,9 @@ pub fn nu_value_to_json(
                     nu_protocol::ast::PathMember::Int { val, .. } => {
                         Value::Number((*val as i64).into())
                     }
+                    nu_protocol::ast::PathMember::Expression { .. } => {
+                        unreachable!("expression path members should be compiled away before runtime")
+                    }
                 })
                 .collect();
             Value::Array(parts)

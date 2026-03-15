@@ -257,7 +257,8 @@ impl BlockBuilder {
                 op: _,
                 rhs,
             } => allocate(&[*lhs_dst, *rhs], &[*lhs_dst]),
-            Instruction::FollowCellPath { src_dst, path } => {
+            Instruction::FollowCellPath { src_dst, path }
+            | Instruction::FollowCellPathDynamic { src_dst, path, .. } => {
                 allocate(&[*src_dst, *path], &[*src_dst])
             }
             Instruction::CloneCellPath { dst, src, path } => {

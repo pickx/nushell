@@ -134,6 +134,9 @@ pub fn value_to_json_value(
                 .map(|x| match &x {
                     PathMember::String { val, .. } => Ok(nu_json::Value::String(val.clone())),
                     PathMember::Int { val, .. } => Ok(nu_json::Value::U64(*val as u64)),
+                    PathMember::Expression { .. } => {
+                        unreachable!("expression path members should be compiled away before runtime")
+                    }
                 })
                 .collect::<Result<Vec<nu_json::Value>, ShellError>>()?,
         ),

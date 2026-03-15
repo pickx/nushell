@@ -122,6 +122,9 @@ pub fn value_to_yaml_value(
                     PathMember::Int { val, .. } => {
                         Ok(serde_yaml::Value::Number(serde_yaml::Number::from(*val)))
                     }
+                    PathMember::Expression { .. } => {
+                        unreachable!("expression path members should be compiled away before runtime")
+                    }
                 })
                 .collect::<Result<Vec<serde_yaml::Value>, ShellError>>()?,
         ),

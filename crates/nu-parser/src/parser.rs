@@ -2675,54 +2675,46 @@ fn parse_cell_path_member_literal(
     }
 }
 
-/// we only accept constant subexpressions,
-/// and only if they evaluate to int or string
+/// we only accept subexpressions if they evaluate to int or string
 fn parse_cell_path_member_subexpression(
     working_set: &mut StateWorkingSet,
     outer_span: Span,
 ) -> Result<PathMember, ParseError> {
     let subexpression = parse_subexpression(working_set, outer_span);
 
-    dbg!(&subexpression);
-
-    // avoids nesting in the `match` expression below
-    // (incoming deprecation of `internal_span` forbids pattern matching)
-    fn eval_constant_with_span(
-        working_set: &StateWorkingSet,
-        expr: &Expression,
-    ) -> Result<(Value, Span), ShellError> {
-        let value = eval_constant(working_set, &expr)?;
+    fn check_value_type(value: Value) -> Result<PathMember, ParseError> {
         let span = value.span();
-        Ok((value, span))
+        match value {
+            Value::Int { val, .. } => parse_index(val, span).map(|val| PathMember::Int {
+                val,
+                span,
+                optional: false,
+            }),
+
+            Value::String { val, .. } => Ok(PathMember::String {
+                val,
+                span,
+                casing: Casing::Sensitive,
+                optional: false,
+            }),
+
+            _ => Err(ParseError::Expected(
+                "subexpression of type int or string",
+                span,
+            )),
+        }
     }
 
-    match eval_constant_with_span(working_set, &subexpression) {
-        Ok((Value::Int { val, .. }, span)) => parse_index(val, span).map(|val| PathMember::Int {
-            val,
-            span,
-            optional: false,
-        }),
-
-        Ok((Value::String { val, .. }, span)) => Ok(PathMember::String {
-            val,
-            span,
-            casing: Casing::Sensitive,
-            optional: false,
-        }),
-
-        Ok((_, span)) => Err(ParseError::Expected(
-            "subexpression of type int or string",
-            span,
-        )),
-
-        Err(
-            err @ ShellError::NotAConstant { span } | err @ ShellError::NotAConstCommand { span },
-        ) => {
-            let err = err.wrap(&working_set, span);
-            Err(err)
+    match eval_constant(working_set, &subexpression) {
+        Ok(value) => check_value_type(value),
+        Err(ShellError::NotAConstant { .. } | ShellError::NotAConstCommand { .. }) => {
+            Ok(PathMember::Expression {
+                expr: Box::new(subexpression),
+                span: outer_span,
+                optional: false,
+            })
         }
 
-        // is this right? also note that we're using the outer span here, which isn't ideal
         Err(_) => Err(ParseError::Expected("int or string", outer_span)),
     }
 }

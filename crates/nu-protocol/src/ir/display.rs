@@ -206,6 +206,18 @@ impl fmt::Display for FmtInstruction<'_> {
             Instruction::FollowCellPath { src_dst, path } => {
                 write!(f, "{:WIDTH$} {src_dst}, {path}", "follow-cell-path")
             }
+            Instruction::FollowCellPathDynamic {
+                src_dst,
+                path,
+                optional,
+            } => {
+                let opt = if *optional { "?" } else { "" };
+                write!(
+                    f,
+                    "{:WIDTH$} {src_dst}, {path}{opt}",
+                    "follow-cell-path-dyn"
+                )
+            }
             Instruction::CloneCellPath { dst, src, path } => {
                 write!(f, "{:WIDTH$} {dst}, {src}, {path}", "clone-cell-path")
             }

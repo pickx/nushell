@@ -181,6 +181,18 @@ fn flatten_positional_arg_into(
     }
 }
 
+fn push_path_member(
+    working_set: &StateWorkingSet,
+    member: &PathMember,
+    output: &mut Vec<(Span, FlatShape)>,
+) {
+    match member {
+        PathMember::String { span, .. } => output.push((*span, FlatShape::String)),
+        PathMember::Int { span, .. } => output.push((*span, FlatShape::Int)),
+        PathMember::Expression { expr, .. } => flatten_expression_into(working_set, expr, output),
+    }
+}
+
 fn flatten_expression_into(
     working_set: &StateWorkingSet,
     expr: &Expression,
@@ -372,17 +384,15 @@ fn flatten_expression_into(
             output.push((value.unit.span, FlatShape::String));
         }
         Expr::CellPath(cell_path) => {
-            output.extend(cell_path.members.iter().map(|member| match *member {
-                PathMember::String { span, .. } => (span, FlatShape::String),
-                PathMember::Int { span, .. } => (span, FlatShape::Int),
-            }));
+            for member in &cell_path.members {
+                push_path_member(working_set, member, output);
+            }
         }
         Expr::FullCellPath(cell_path) => {
             flatten_expression_into(working_set, &cell_path.head, output);
-            output.extend(cell_path.tail.iter().map(|member| match *member {
-                PathMember::String { span, .. } => (span, FlatShape::String),
-                PathMember::Int { span, .. } => (span, FlatShape::Int),
-            }));
+            for member in &cell_path.tail {
+                push_path_member(working_set, member, output);
+            }
         }
         Expr::ImportPattern(import_pattern) => {
             output.push((import_pattern.head.span, FlatShape::String));
