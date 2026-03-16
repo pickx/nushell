@@ -580,7 +580,17 @@ impl Eval for EvalRuntime {
                         if is_env || engine_state.get_var(*var_id).mutable {
                             let mut lhs =
                                 eval_expression::<D>(engine_state, stack, &cell_path.head)?;
-                            let tail_static: Vec<_> = cell_path.tail_static().cloned().collect();
+
+                            if let Some(member) = cell_path
+                                .tail
+                                .iter()
+                                .find(|member| matches!(member, ParsedPathMember::Dynamic { .. }))
+                            {
+                                return Err(ShellError::AssignmentRequiresStaticCellPath {
+                                    span_of_non_const_member: member.span(),
+                                });
+                            }
+
                             if is_env {
                                 // Reject attempts to assign to the entire $env
                                 if cell_path.tail.is_empty() {
@@ -592,14 +602,6 @@ impl Eval for EvalRuntime {
                                 // Updating environment variables should be case-preserving,
                                 // so we need to figure out the original key before we do anything
                                 let member = &cell_path.tail[0];
-                                let Some(member) = member.as_static() else {
-                                    return Err(ShellError::TypeMismatch {
-                                        err_message:
-                                            "cannot assign to $env with a dynamic cell path member"
-                                                .into(),
-                                        span: member.span(),
-                                    });
-                                };
                                 let (key, span) = match member {
                                     PathMember::String { val, span, .. } => (val.to_string(), span),
                                     PathMember::Int { val, span, .. } => (val.to_string(), span),

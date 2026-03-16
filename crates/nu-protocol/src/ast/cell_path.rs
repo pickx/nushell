@@ -210,10 +210,9 @@ impl ParsedPathMember {
     }
 
     pub fn as_static(&self) -> Option<&PathMember> {
-        if let ParsedPathMember::Static(member) = self {
-            Some(member)
-        } else {
-            None
+        match self {
+            ParsedPathMember::Static(member) => Some(member),
+            _ => None,
         }
     }
 }

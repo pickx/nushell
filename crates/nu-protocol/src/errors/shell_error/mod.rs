@@ -198,6 +198,18 @@ pub enum ShellError {
         lhs_span: Span,
     },
 
+    /// Invalid assignment left-hand side
+    ///
+    /// ## Resolution
+    ///
+    /// Assignment requires that you assign to a mutable variable or cell path.
+    #[error("Assignment to non-const cell path.")]
+    #[diagnostic(code(nu::shell::assignment_requires_static_cell_path))]
+    AssignmentRequiresStaticCellPath {
+        #[label = "path needs to be known at compile time"]
+        span_of_non_const_member: Span,
+    },
+
     /// An operator was not recognized during evaluation.
     ///
     /// ## Resolution
