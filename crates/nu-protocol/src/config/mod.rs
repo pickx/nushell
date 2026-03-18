@@ -68,6 +68,7 @@ pub struct Config {
     pub rm: RmConfig,
     pub shell_integration: ShellIntegrationConfig,
     pub buffer_editor: Value,
+    pub position_pattern: Value,
     pub show_banner: BannerKind,
     pub bracketed_paste: bool,
     pub render_right_prompt_on_last_line: bool,
@@ -118,6 +119,7 @@ impl Default for Config {
             footer_mode: FooterMode::RowCount(25),
             float_precision: 2,
             buffer_editor: Value::nothing(Span::unknown()),
+            position_pattern: Value::nothing(Span::unknown()),
             use_ansi_coloring: UseAnsiColoring::default(),
             bracketed_paste: true,
             edit_mode: EditBindings::default(),
@@ -191,6 +193,21 @@ impl UpdateFromValue for Config {
                     _ => errors.type_mismatch(
                         path,
                         Type::custom("string, list<string>, or nothing"),
+                        val,
+                    ),
+                },
+                "position_pattern" => match val {
+                    Value::Nothing { .. } => {
+                        self.position_pattern = val.clone();
+                    }
+                    Value::List { vals, .. }
+                        if vals.iter().all(|val| matches!(val, Value::String { .. })) =>
+                    {
+                        self.position_pattern = val.clone();
+                    }
+                    _ => errors.type_mismatch(
+                        path,
+                        Type::custom("list<string> or nothing"),
                         val,
                     ),
                 },

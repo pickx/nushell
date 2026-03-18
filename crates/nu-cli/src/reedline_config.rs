@@ -13,9 +13,10 @@ use nu_protocol::{
 };
 use reedline::{
     ColumnarMenu, DescriptionMenu, DescriptionMode, EditCommand, EditCommandDiscriminants, IdeMenu,
-    Keybindings, ListMenu, MenuBuilder, Reedline, ReedlineEvent, ReedlineEventDiscriminants,
-    ReedlineMenu, TextObject, TextObjectScope, TextObjectType, TraversalDirection,
-    default_emacs_keybindings, default_vi_insert_keybindings, default_vi_normal_keybindings,
+    Keybindings, ListMenu, MenuBuilder, PositionPattern, Reedline, ReedlineEvent,
+    ReedlineEventDiscriminants, ReedlineMenu, TextObject, TextObjectScope, TextObjectType,
+    TraversalDirection, default_emacs_keybindings, default_vi_insert_keybindings,
+    default_vi_normal_keybindings,
 };
 use std::{str::FromStr, sync::Arc};
 
@@ -1769,5 +1770,31 @@ mod test {
                 select: true
             }]))
         );
+    }
+}
+
+pub(crate) fn get_position_pattern(config: &Config) -> Option<PositionPattern> {
+    let vals = match &config.position_pattern {
+        Value::List { vals, .. } => vals,
+        Value::Nothing { .. } => return None,
+        _ => {
+            // TODO: error handling (should be correct type)
+            return None;
+        }
+    };
+
+    let pattern: Option<Vec<String>> = vals
+        .iter()
+        .map(|value| {
+            let str = value.as_str().ok()?;
+            Some(str.to_owned())
+        })
+        .collect();
+
+    if let Some(pattern) = pattern {
+        PositionPattern::new(pattern)
+    } else {
+        // TODO: error handling (non-string values in list is an error)
+        None
     }
 }

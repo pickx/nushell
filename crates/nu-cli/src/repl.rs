@@ -11,7 +11,7 @@ use crate::{
     hints::ExternalHinter,
     nu_highlight::NoOpHighlighter,
     prompt_update,
-    reedline_config::{KeybindingsMode, add_menus, create_keybindings},
+    reedline_config::{KeybindingsMode, add_menus, create_keybindings, get_position_pattern},
     util::eval_source,
 };
 use crossterm::cursor::SetCursorStyle;
@@ -462,8 +462,8 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
 
     start_time = std::time::Instant::now();
     trace!("adding menus");
-    line_editor =
-        add_menus(line_editor, engine_reference, &stack_arc, config).unwrap_or_else(|e| {
+    line_editor = add_menus(line_editor, engine_reference, &stack_arc, config.clone())
+        .unwrap_or_else(|e| {
             report_shell_error(None, engine_state, &e);
             Reedline::create()
         });
@@ -480,7 +480,16 @@ fn loop_iteration(ctx: LoopContext) -> (bool, Stack, Reedline) {
             HashMap::default()
         });
         command.args(args).envs(envs);
-        line_editor.with_buffer_editor(command, temp_file.to_path_buf())
+
+        let temp_file = temp_file.to_path_buf();
+
+        if let Some(pos_pattern) = get_position_pattern(&config) {
+            line_editor
+                .with_buffer_editor(command, temp_file)
+                .with_buffer_editor_position_pattern(pos_pattern)
+        } else {
+            line_editor.with_buffer_editor(command, temp_file)
+        }
     } else {
         line_editor
     };
@@ -1449,6 +1458,7 @@ fn run_finaliziation_ansi_sequence(
         );
     }
 }
+
 
 // Absolute paths with a drive letter, like 'C:', 'D:\', 'E:\foo'
 #[cfg(windows)]

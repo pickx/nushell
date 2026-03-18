@@ -6780,7 +6780,6 @@ dependencies = [
 [[package]]
 name = "reedline"
 version = "0.46.0"
-source = "git+https://github.com/nushell/reedline?branch=main#5c2f105bcff664f9fe9e4cef7699808abde4a335"
 dependencies = [
  "arboard",
  "chrono",
@@ -10330,3 +10329,8 @@ checksum = "ec5f41c76397b7da451efd19915684f727d7e1d516384ca6bd0ec43ec94de23c"
 dependencies = [
  "zune-core",
 ]
+
+[[patch.unused]]
+name = "reedline"
+version = "0.46.0"
+source = "git+https://github.com/nushell/reedline?branch=main#5c2f105bcff664f9fe9e4cef7699808abde4a335"
