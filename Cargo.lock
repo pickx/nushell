@@ -6780,6 +6780,7 @@ dependencies = [
 [[package]]
 name = "reedline"
 version = "0.46.0"
+source = "git+https://github.com/pickx/reedline?branch=open-editor-pos#b820e1a7d1b04337b51aac703667255c5abaf85f"
 dependencies = [
  "arboard",
  "chrono",
