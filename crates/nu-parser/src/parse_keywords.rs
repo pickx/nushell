@@ -1575,6 +1575,7 @@ pub fn parse_export_in_module(
                     parts: spans[1..].to_vec(),
                     pipe: lite_command.pipe,
                     redirection: lite_command.redirection.clone(),
+                    garbage: lite_command.garbage.clone(),
                     attribute_idx: vec![],
                 };
                 let mut pipeline = parse_alias(working_set, &lite_command, Some(module_name));
@@ -1612,6 +1613,7 @@ pub fn parse_export_in_module(
                     parts: spans[1..].to_vec(),
                     pipe: lite_command.pipe,
                     redirection: lite_command.redirection.clone(),
+                    garbage: lite_command.garbage.clone(),
                     attribute_idx: vec![],
                 };
                 let (mut pipeline, exportables) =

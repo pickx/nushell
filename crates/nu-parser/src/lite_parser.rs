@@ -65,6 +65,7 @@ pub struct LiteCommand {
     pub comments: Vec<Span>,
     pub parts: Vec<Span>,
     pub redirection: Option<LiteRedirection>,
+    pub garbage: Vec<Span>,
     /// one past the end indices of attributes
     pub attribute_idx: Vec<usize>,
 }
@@ -355,6 +356,12 @@ pub fn lite_parse(
                             command.comments.push(token.span);
                             curr_comment = None;
                         }
+                        TokenContents::Garbage => {
+                            // error has already been emitted when this token was created
+                            command.push(span);
+                            command.push(token.span);
+                            command.garbage.push(token.span);
+                        }
                     }
                 } else {
                     match &token.contents {
@@ -485,6 +492,11 @@ pub fn lite_parse(
                                     curr_comment = Some(vec![token.span]);
                                 }
                             }
+                        }
+                        TokenContents::Garbage => {
+                            // error has already been emitted when this token was created
+                            command.push(token.span);
+                            command.garbage.push(token.span);
                         }
                     }
                 }

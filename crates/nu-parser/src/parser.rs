@@ -485,6 +485,10 @@ fn parse_external_string(working_set: &mut StateWorkingSet, span: Span) -> Expre
 }
 
 fn parse_external_arg(working_set: &mut StateWorkingSet, span: Span) -> ExternalArgument {
+    if working_set.is_lexer_garbage(span) {
+        return ExternalArgument::Regular(Expression::garbage(working_set, span));
+    }
+
     let contents = working_set.get_span_contents(span);
 
     if contents.len() > 3
@@ -1095,6 +1099,12 @@ pub fn parse_internal_call(
     while spans_idx < spans.len() {
         let arg_span = spans[spans_idx];
 
+        if working_set.is_lexer_garbage(arg_span) {
+            call.add_positional(Expression::garbage(working_set, arg_span));
+            spans_idx += 1;
+            continue;
+        }
+
         let starting_error_count = working_set.parse_errors.len();
         // Check if we're on a long flag, if so, parse
         let (long_name, arg) = parse_long_flag(working_set, spans, &mut spans_idx, &signature);
@@ -1401,6 +1411,10 @@ pub fn parse_internal_call(
 
 pub fn parse_call(working_set: &mut StateWorkingSet, spans: &[Span], head: Span) -> Expression {
     trace!("parsing: call");
+
+    if working_set.is_lexer_garbage(head) {
+        return garbage(working_set, head);
+    }
 
     if spans.is_empty() {
         working_set.error(ParseError::UnknownState(
@@ -1779,7 +1793,10 @@ fn parse_binary_with_base(
                     working_set.error(ParseError::Expected("binary", span));
                     return garbage(working_set, span);
                 }
-                TokenContents::Comment | TokenContents::Semicolon | TokenContents::Eol => {}
+                TokenContents::Comment
+                | TokenContents::Semicolon
+                | TokenContents::Eol
+                | TokenContents::Garbage => {}
             }
         }
 
@@ -6742,6 +6759,12 @@ pub(crate) fn redirecting_builtin_error(
 }
 
 pub fn parse_pipeline(working_set: &mut StateWorkingSet, pipeline: &LitePipeline) -> Pipeline {
+    for command in &pipeline.commands {
+        working_set
+            .lexer_garbage
+            .extend_from_slice(&command.garbage);
+    }
+
     if pipeline.commands.len() > 1 {
         // Parse a normal multi command pipeline
         let elements: Vec<_> = pipeline

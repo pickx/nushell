@@ -32,6 +32,7 @@ pub struct StateWorkingSet<'a> {
     pub parse_errors: Vec<ParseError>,
     pub parse_warnings: Vec<ParseWarning>,
     pub compile_errors: Vec<CompileError>,
+    pub lexer_garbage: Vec<Span>,
 }
 
 impl<'a> StateWorkingSet<'a> {
@@ -51,6 +52,7 @@ impl<'a> StateWorkingSet<'a> {
             parse_errors: vec![],
             parse_warnings: vec![],
             compile_errors: vec![],
+            lexer_garbage: vec![],
         }
     }
 
@@ -60,6 +62,10 @@ impl<'a> StateWorkingSet<'a> {
 
     pub fn error(&mut self, parse_error: ParseError) {
         self.parse_errors.push(parse_error)
+    }
+
+    pub fn is_lexer_garbage(&self, span: Span) -> bool {
+        self.lexer_garbage.contains(&span)
     }
 
     pub fn warning(&mut self, parse_warning: ParseWarning) {
