@@ -6,7 +6,7 @@ use nu_protocol::{
 };
 use rstest::rstest;
 
-use mock::{Alias, AttrEcho, Const, Def, IfMocked, Let, Mut, ToCustom};
+use mock::{Alias, AttrEcho, Const, Def, Get, IfMocked, InputList, Let, LsTest, Mut, ToCustom};
 
 fn test_int(
     test_tag: &str,     // name of sub-test
@@ -704,6 +704,35 @@ pub fn parse_call_missing_req_flag() {
         working_set.parse_errors.first(),
         Some(ParseError::MissingRequiredFlag(..))
     ));
+}
+
+#[test]
+pub fn parse_input_list_display_closure() {
+    // `ls | input list --display {get name}` should parse without errors.
+    // The `--display` flag accepts a closure, and `{get name}` is a valid
+    // shorthand closure (block used as closure).
+    let mut engine_state = EngineState::new();
+    let delta = {
+        let mut working_set = StateWorkingSet::new(&engine_state);
+        working_set.add_decl(Box::new(LsTest));
+        working_set.add_decl(Box::new(Get));
+        working_set.add_decl(Box::new(InputList));
+        working_set.render()
+    };
+    engine_state.merge_delta(delta).unwrap();
+
+    let mut working_set = StateWorkingSet::new(&engine_state);
+    parse(
+        &mut working_set,
+        None,
+        b"ls | input list --display {get name}",
+        true,
+    );
+    assert!(
+        working_set.parse_errors.is_empty(),
+        "expected no parse errors, got: {:?}",
+        working_set.parse_errors
+    );
 }
 
 #[test]
@@ -2720,6 +2749,72 @@ mod mock {
             _input: PipelineData,
         ) -> Result<PipelineData, ShellError> {
             panic!("Should not be called!")
+        }
+    }
+
+    #[derive(Clone)]
+    pub struct Get;
+
+    impl Command for Get {
+        fn name(&self) -> &str {
+            "get"
+        }
+
+        fn description(&self) -> &str {
+            "Mock get command."
+        }
+
+        fn signature(&self) -> nu_protocol::Signature {
+            Signature::build("get")
+                .required("cell_path", SyntaxShape::CellPath, "The cell path to get.")
+                .category(Category::Default)
+        }
+
+        fn run(
+            &self,
+            _engine_state: &EngineState,
+            _stack: &mut Stack,
+            _call: &Call,
+            _input: PipelineData,
+        ) -> Result<PipelineData, ShellError> {
+            todo!()
+        }
+    }
+
+    #[derive(Clone)]
+    pub struct InputList;
+
+    impl Command for InputList {
+        fn name(&self) -> &str {
+            "input list"
+        }
+
+        fn description(&self) -> &str {
+            "Mock input list command."
+        }
+
+        fn signature(&self) -> nu_protocol::Signature {
+            Signature::build("input list")
+                .named(
+                    "display",
+                    SyntaxShape::OneOf(vec![
+                        SyntaxShape::CellPath,
+                        SyntaxShape::Closure(Some(vec![SyntaxShape::Any])),
+                    ]),
+                    "Field or closure to generate display value.",
+                    Some('d'),
+                )
+                .category(Category::Default)
+        }
+
+        fn run(
+            &self,
+            _engine_state: &EngineState,
+            _stack: &mut Stack,
+            _call: &Call,
+            _input: PipelineData,
+        ) -> Result<PipelineData, ShellError> {
+            todo!()
         }
     }
 }
