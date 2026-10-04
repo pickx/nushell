@@ -1,4 +1,5 @@
 use assert_cmd::cargo_bin;
+use rstest::rstest;
 use std::process::Command;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -1855,6 +1856,51 @@ fn stdin_flag_with_commands_receives_input() -> TestResult {
 
     assert!(output.status.success());
     assert!(stdout.contains("test input"));
+    Ok(())
+}
+
+#[rstest]
+#[cfg_attr(unix, case::cat("^cat"))]
+#[cfg_attr(unix, case::tee("^tee"))]
+#[cfg_attr(unix, case::open("open --raw /dev/stdin"))]
+#[cfg_attr(windows, case::sort_exe("^sort.exe"))]
+fn stdin_preserved_after_config_load(
+    #[case] cmd: &str,
+    #[values("", "$in", "$in; null", "$in; let bar = {cmd}")] after: &str,
+) -> TestResult {
+    let mut config = String::new();
+    config.push_str("let foo = {cmd}; ");
+    config.push_str(after);
+    let config = config.replace("{cmd}", cmd);
+
+    let config_path = tempfile::tempdir()?;
+    let config_path = config_path.path().join("config.nu");
+
+    let piped_input = b"piped input";
+
+    std::fs::write(&config_path, config)?;
+
+    let mut child = Command::new(cargo_bin!())
+        .arg("--config")
+        .arg(&config_path)
+        .args(["--stdin", "--commands", "print"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        stdin.write_all(piped_input)?;
+    }
+
+    let output = child.wait_with_output()?;
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+
+    assert_eq!(output.stdout, piped_input);
+
     Ok(())
 }
 
